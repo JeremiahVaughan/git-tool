@@ -5,6 +5,7 @@ go 1.22.6
 require (
 	github.com/charmbracelet/bubbles v0.19.0
 	github.com/charmbracelet/bubbletea v1.1.0
+	github.com/mattn/go-sqlite3 v1.14.22
 )
 
 require (

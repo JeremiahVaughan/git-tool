@@ -1,12 +1,16 @@
 package main
 
 import (
+	"embed"
 	"fmt"
 	"log"
 
 	"github.com/charmbracelet/bubbles/textinput"
 	tea "github.com/charmbracelet/bubbletea"
 )
+
+//go:embed schema/*
+var databaseFiles embed.FS
 
 type model struct {
 	addNewRepo textinput.Model
