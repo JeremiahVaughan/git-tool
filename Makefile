@@ -1,2 +1,3 @@
-b: go run .
+b: 
+	TEST_MODE="false" go run .
 

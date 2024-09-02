@@ -15,12 +15,11 @@ import (
 	_ "github.com/mattn/go-sqlite3"
 )
 
-var DatabaseMigrationDirectory = "database"
+var DatabaseMigrationDirectory = "schema"
 var database *sql.DB
 
 func init() {
 	if os.Getenv("TEST_MODE") == "false" {
-		log.Printf("initializing schema")
 		homeDir, err := os.UserHomeDir()
 		if err != nil {
 			log.Fatalf("error, could not find the home directory. Error: %v", err)
@@ -31,7 +30,6 @@ func init() {
 			log.Fatalf("error, could not create data directory. Error: %v", err)
 		}
 
-		log.Printf("file connection")
 		dbFile := fmt.Sprintf("%s%s", gitToolData, "data")
 		_, err = os.Stat(dbFile)
 		if os.IsNotExist(err) {
@@ -46,12 +44,10 @@ func init() {
 			log.Fatalf("error, when checking db file exists. Error: %v", err)
 		}
 
-		log.Printf("openning connection")
 		database, err = sql.Open("sqlite3", dbFile)
 		if err != nil {
 			log.Fatalf("error, when establishing connection with sqlite db. Error: %v", err)
 		}
-		log.Printf("out connection")
 	}
 }
 
@@ -61,7 +57,6 @@ func ProcessSchemaChanges(databaseFiles embed.FS) error {
 		return fmt.Errorf("error occurred when attempting to create init table: %v", err)
 	}
 
-	log.Println("checking for migrations ...")
 	dirEntries, err := fs.ReadDir(databaseFiles, DatabaseMigrationDirectory)
 	if err != nil {
 		return fmt.Errorf("an error has occurred when attempting to read database directory. Error: %v", err)
@@ -75,9 +70,7 @@ func ProcessSchemaChanges(databaseFiles embed.FS) error {
 
 	migrationFiles := filterForMigrationFiles(migrationFileCandidateFileNames)
 	var migrationsCompleted []string
-	noMigrationsToProcessMessage := "no database migration files to process, skipping migrations ..."
 	if len(migrationFiles) == 0 {
-		log.Println(noMigrationsToProcessMessage)
 		return nil
 	} else {
 		migrationsCompleted, err = checkForCompletedMigrations()
@@ -89,8 +82,6 @@ func ProcessSchemaChanges(databaseFiles embed.FS) error {
 	migrationsNeeded := determineMigrationsNeeded(migrationFiles, migrationsCompleted)
 	migrationsNeededSorted := sortMigrationsNeededFiles(migrationsNeeded)
 	for _, fileName := range migrationsNeededSorted {
-		log.Printf("attempting to perform database migration with %s ...", fileName)
-
 		filePath := fmt.Sprintf("%s/%s", DatabaseMigrationDirectory, fileName)
 		err = executeSQLFile(filePath, databaseFiles)
 		if err != nil {
@@ -101,20 +92,17 @@ func ProcessSchemaChanges(databaseFiles embed.FS) error {
 			return fmt.Errorf("error has occurred when attempting to record a successful migration: %v", err)
 		}
 	}
-	log.Println("finished database schema changes")
 	return nil
 }
 
 func createInitTable() error {
-	_, err := database.Exec(`EXISTS init
-                        (
-                            id  SERIAL NOT NULL
-                                CONSTRAINT init_pk 
-                                    PRIMARY KEY,
-                            migration_file_name TEXT   NOT NULL
-                                CONSTRAINT init_migration_file_name_uindex
-                                    UNIQUE
-                        )`)
+	_, err := database.Exec(`CREATE TABLE IF NOT EXISTS init
+		(
+			id INTEGER PRIMARY KEY AUTOINCREMENT,
+			migration_file_name TEXT NOT NULL
+				CONSTRAINT init_migration_file_name_uindex UNIQUE
+		);
+	`)
 	if err != nil {
 		return fmt.Errorf("error, when executing query to create init table: %v", err)
 	}
