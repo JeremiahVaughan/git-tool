@@ -40,8 +40,8 @@ type model struct {
 type viewOption string
 
 const (
-	addNewRepo viewOption = "anr"
-	listRepos  viewOption = "lr"
+	activeViewAddNewRepo viewOption = "anr"
+	activeViewListRepos  viewOption = "lr"
 )
 
 var deleteItemKeyBinding = key.NewBinding(
@@ -83,6 +83,7 @@ func initModel() model {
 
 	return model{
 		addNewRepo: ti,
+		activeView: activeViewListRepos,
 		repos:      theList,
 		err:        nil,
 	}
@@ -106,42 +107,4 @@ type (
 
 func (m model) Init() tea.Cmd {
 	return textinput.Blink
-}
-
-func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
-	var cmd tea.Cmd
-
-	switch msg := msg.(type) {
-	case tea.KeyMsg:
-		if key.Matches(msg, addItemKeyBinding) {
-			// todo add new repo functionality
-		} else if key.Matches(msg, deleteItemKeyBinding) {
-			// todo add delete repo functionality
-		}
-		switch msg.Type {
-		case tea.KeyCtrlC, tea.KeyEsc:
-			return m, tea.Quit
-		}
-	case tea.WindowSizeMsg:
-		h, v := docStyle.GetFrameSize()
-		m.repos.SetSize(msg.Width-h, msg.Height-v)
-	case errMsg:
-		m.err = msg
-		return m, nil
-	}
-
-	// m.addNewRepo, cmd = m.addNewRepo.Update(msg)
-	m.repos, cmd = m.repos.Update(msg)
-	return m, cmd
-}
-
-func (m model) View() string {
-	// if len(m.repos.SetShowFilter(true)) == 0 {
-	// }
-
-	return docStyle.Render(m.repos.View())
-	// return fmt.Sprintf(
-	// 	"Add a repo\n%s\n",
-	// 	m.addNewRepo.View(),
-	// )
 }
