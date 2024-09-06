@@ -31,10 +31,11 @@ func (r repo) Description() string { return r.url }
 func (r repo) FilterValue() string { return r.url }
 
 type model struct {
-	addNewRepo textinput.Model
-	repos      list.Model
-	activeView viewOption
-	err        error
+	addNewRepo    textinput.Model
+	repos         list.Model
+	activeView    viewOption
+	err           error
+	validationMsg string
 }
 
 type viewOption string

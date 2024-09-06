@@ -27,8 +27,16 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			case tea.KeyEsc:
 				m.activeView = activeViewListRepos
 			case tea.KeyEnter:
-				m.activeView = activeViewListRepos
-				// todo clone repo then update model
+				validationMsg, err := addRepo(m.addNewRepo.Value())
+				if err != nil || validationMsg != "" {
+					m.err = err
+					m.validationMsg = validationMsg
+				} else {
+					m.err = nil
+					m.addNewRepo.Reset()
+					m.validationMsg = ""
+					m.activeView = activeViewListRepos
+				}
 			}
 			m.addNewRepo, cmd = m.addNewRepo.Update(msg)
 		}
