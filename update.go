@@ -1,7 +1,10 @@
 package main
 
 import (
+	"fmt"
+
 	"github.com/charmbracelet/bubbles/key"
+	"github.com/charmbracelet/bubbles/list"
 	tea "github.com/charmbracelet/bubbletea"
 )
 
@@ -16,10 +19,12 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 		switch m.activeView {
 		case activeViewListRepos:
-			if key.Matches(msg, addItemKeyBinding) {
-				m.activeView = activeViewAddNewRepo
-			} else if key.Matches(msg, deleteItemKeyBinding) {
-				// todo remove git tree and update model with list after item removed
+			if m.repos.FilterState() != list.Filtering {
+				if key.Matches(msg, addItemKeyBinding) {
+					m.activeView = activeViewAddNewRepo
+				} else if key.Matches(msg, deleteItemKeyBinding) {
+					// todo remove git tree and update model with list after item removed
+				}
 			}
 			m.repos, cmd = m.repos.Update(msg)
 		case activeViewAddNewRepo:
@@ -31,12 +36,19 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				if err != nil || validationMsg != "" {
 					m.err = err
 					m.validationMsg = validationMsg
-				} else {
-					m.err = nil
-					m.addNewRepo.Reset()
-					m.validationMsg = ""
-					m.activeView = activeViewListRepos
+					return m, cmd
 				}
+				m.err = nil
+				m.addNewRepo.Reset()
+				m.validationMsg = ""
+
+				repos, err := fetchRepos()
+				if err != nil {
+					m.err = fmt.Errorf("error, when fetchRepos() for Update(). Error: %v", err)
+					return m, cmd
+				}
+				m.repos.SetItems(repos)
+				m.activeView = activeViewListRepos
 			}
 			m.addNewRepo, cmd = m.addNewRepo.Update(msg)
 		}

@@ -2,8 +2,8 @@ package main
 
 import (
 	"embed"
+	"fmt"
 	"log"
-	"strings"
 
 	"github.com/charmbracelet/bubbles/key"
 	"github.com/charmbracelet/bubbles/list"
@@ -17,22 +17,10 @@ var databaseFiles embed.FS
 
 var docStyle = lipgloss.NewStyle().Margin(1, 2)
 
-type repo struct {
-	url         string
-	trunkBranch string
-}
-
-func (r repo) Title() string {
-	urlParts := strings.Split(r.url, "/")
-	repoName := urlParts[len(urlParts)-1]
-	return strings.TrimSuffix(repoName, ".git")
-}
-func (r repo) Description() string { return r.url }
-func (r repo) FilterValue() string { return r.url }
-
 type model struct {
 	addNewRepo    textinput.Model
 	repos         list.Model
+	efforts       list.Model
 	activeView    viewOption
 	err           error
 	validationMsg string
@@ -41,8 +29,9 @@ type model struct {
 type viewOption string
 
 const (
-	activeViewAddNewRepo viewOption = "anr"
-	activeViewListRepos  viewOption = "lr"
+	activeViewAddNewRepo  viewOption = "anr"
+	activeViewListRepos   viewOption = "lr"
+	activeViewListEfforts viewOption = "le"
 )
 
 var deleteItemKeyBinding = key.NewBinding(
@@ -55,24 +44,18 @@ var addItemKeyBinding = key.NewBinding(
 	key.WithHelp("a", "add repo"),
 )
 
-func initModel() model {
+func initModel() (model, error) {
 	ti := textinput.New()
 	ti.Placeholder = "git@github.com:JeremiahVaughan/git-tool.git"
 	ti.Focus()
 	ti.CharLimit = 256
 	ti.Width = 50
 
-	// test code
-	repos := []list.Item{
-		repo{
-			url:         "git@github.com:JeremiahVaughan/git-tool.git",
-			trunkBranch: "master",
-		},
-		repo{
-			url:         "git@github.com:JeremiahVaughan/strength-gadget-v5.git",
-			trunkBranch: "trunk",
-		},
+	repos, err := fetchRepos()
+	if err != nil {
+		return model{}, fmt.Errorf("error, when fetchRepos() for initModel(). Error: %v", err)
 	}
+
 	theList := list.New(repos, list.NewDefaultDelegate(), 0, 0) // will set width and height later
 	theList.Title = "Your Repos"
 	theList.AdditionalShortHelpKeys = func() []key.Binding {
@@ -84,10 +67,10 @@ func initModel() model {
 
 	return model{
 		addNewRepo: ti,
-		activeView: activeViewListRepos,
 		repos:      theList,
+		activeView: activeViewListRepos,
 		err:        nil,
-	}
+	}, nil
 }
 
 func main() {
@@ -96,7 +79,12 @@ func main() {
 		log.Fatalf("error, when processing schema changes. Error: %v", err)
 	}
 
-	p := tea.NewProgram(initModel(), tea.WithAltScreen())
+	m, err := initModel()
+	if err != nil {
+		log.Fatalf("error, when initModel() for main(). Error: %v", err)
+	}
+
+	p := tea.NewProgram(m, tea.WithAltScreen())
 	if _, err = p.Run(); err != nil {
 		log.Fatalf("error, during program run. Error: %v", err)
 	}

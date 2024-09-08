@@ -7,7 +7,8 @@ import (
 )
 
 func (m model) View() string {
-	if m.activeView == activeViewAddNewRepo {
+	switch m.activeView {
+	case activeViewAddNewRepo:
 		display := fmt.Sprintf(
 			"Add a repo\n%s\n",
 			m.addNewRepo.View(),
@@ -22,6 +23,9 @@ func (m model) View() string {
 			display += fmt.Sprintf("\n%v", errorStyle.Render(m.validationMsg))
 		}
 		return display
+	case activeViewListEfforts:
+		// display := fmt.Sprintf(
+		// )
 	}
 
 	return docStyle.Render(m.repos.View())
