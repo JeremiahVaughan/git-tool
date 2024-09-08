@@ -6,8 +6,6 @@ import (
 	"github.com/charmbracelet/lipgloss"
 )
 
-var errorStyle = lipgloss.NewStyle().Foreground(lipgloss.Color("1")).Bold(true)
-
 func (m model) View() string {
 	if m.activeView == activeViewAddNewRepo {
 		display := fmt.Sprintf(
@@ -15,14 +13,20 @@ func (m model) View() string {
 			m.addNewRepo.View(),
 		)
 		if m.err != nil {
+			errorStyle := getErrorStyle()
 			errMsg := errorStyle.Render(m.err.Error())
 			display += fmt.Sprintf("\n%v", errMsg)
 		}
 		if m.validationMsg != "" {
+			errorStyle := getErrorStyle()
 			display += fmt.Sprintf("\n%v", errorStyle.Render(m.validationMsg))
 		}
 		return display
 	}
 
 	return docStyle.Render(m.repos.View())
+}
+
+func getErrorStyle() lipgloss.Style {
+	return lipgloss.NewStyle().Foreground(lipgloss.Color("1")).Bold(true).Width(80)
 }
