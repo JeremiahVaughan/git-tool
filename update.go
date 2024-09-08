@@ -26,7 +26,6 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 					// todo remove git tree and update model with list after item removed
 				}
 			}
-			m.repos, cmd = m.repos.Update(msg)
 		case activeViewAddNewRepo:
 			switch msg.Type {
 			case tea.KeyEsc:
@@ -50,9 +49,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.repos.SetItems(repos)
 				m.activeView = activeViewListRepos
 			}
-			m.addNewRepo, cmd = m.addNewRepo.Update(msg)
 		}
-		return m, cmd
 	case tea.WindowSizeMsg:
 		h, v := docStyle.GetFrameSize()
 		m.repos.SetSize(msg.Width-h, msg.Height-v)
@@ -61,5 +58,12 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, nil
 	}
 
+	// if I don't do this down here the updates don't work properly, seems casting to type is causing this
+	switch m.activeView {
+	case activeViewListRepos:
+		m.repos, cmd = m.repos.Update(msg)
+	case activeViewAddNewRepo:
+		m.addNewRepo, cmd = m.addNewRepo.Update(msg)
+	}
 	return m, cmd
 }
