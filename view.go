@@ -7,30 +7,36 @@ import (
 )
 
 func (m model) View() string {
+	if m.err != nil {
+		return getErrorStyle(m.err.Error())
+	}
+
+	var display string
 	switch m.activeView {
 	case activeViewAddNewRepo:
-		display := fmt.Sprintf(
+		display = fmt.Sprintf(
 			"Add a repo\n%s\n",
 			m.addNewRepo.View(),
 		)
-		if m.err != nil {
-			errorStyle := getErrorStyle()
-			errMsg := errorStyle.Render(m.err.Error())
-			display += fmt.Sprintf("\n%v", errMsg)
-		}
-		if m.validationMsg != "" {
-			errorStyle := getErrorStyle()
-			display += fmt.Sprintf("\n%v", errorStyle.Render(m.validationMsg))
-		}
-		return display
+	case activeViewAddNewEffort:
+		display = fmt.Sprintf(
+			"Add an effort\n%s\n",
+			m.addNewEffort.View(),
+		)
+	case activeViewListRepos:
+		display = docStyle.Render(m.repos.View())
 	case activeViewListEfforts:
-		// display := fmt.Sprintf(
-		// )
+		display = docStyle.Render(m.efforts.View())
 	}
 
-	return docStyle.Render(m.repos.View())
+	if m.validationMsg != "" {
+		display += getErrorStyle(m.validationMsg)
+	}
+
+	return display
 }
 
-func getErrorStyle() lipgloss.Style {
-	return lipgloss.NewStyle().Foreground(lipgloss.Color("1")).Bold(true).Width(80)
+func getErrorStyle(errMsg string) string {
+	errorStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("1")).Bold(true).Width(80)
+	return fmt.Sprintf("\n%v", errorStyle.Render(errMsg))
 }

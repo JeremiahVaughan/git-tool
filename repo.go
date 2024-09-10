@@ -14,7 +14,7 @@ import (
 )
 
 type repo struct {
-	Id          string
+	Id          int64
 	Url         string
 	TrunkBranch string
 }
@@ -146,10 +146,7 @@ func fetchRepos() ([]list.Item, error) {
 
 	repos := make([]list.Item, len(result))
 	for i, r := range result {
-		repos[i] = repo{
-			Id:  r.Id,
-			Url: r.Url,
-		}
+		repos[i] = r
 	}
 	if len(repos) == 0 {
 		repos = []list.Item{}
