@@ -25,6 +25,9 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 					return m, cmd
 				} else if key.Matches(msg, deleteItemKeyBinding) {
 					// todo remove git tree and update model with list after item removed
+				} else if key.Matches(msg, navigateToReposBinding) {
+					m.activeView = activeViewListRepos
+					return m, cmd
 				}
 			}
 		case activeViewListRepos:
@@ -34,6 +37,9 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 					return m, cmd
 				} else if key.Matches(msg, deleteItemKeyBinding) {
 					// todo remove git tree and update model with list after item removed
+				} else if key.Matches(msg, navigateToEffortsBinding) {
+					m.activeView = activeViewListEfforts
+					return m, cmd
 				}
 			}
 		case activeViewAddNewRepo:
@@ -85,12 +91,8 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 	case tea.WindowSizeMsg:
 		h, v := docStyle.GetFrameSize()
-		switch m.activeView {
-		case activeViewListRepos:
-			m.repos.SetSize(msg.Width-h, msg.Height-v)
-		case activeViewListEfforts:
-			m.efforts.SetSize(msg.Width-h, msg.Height-v)
-		}
+		m.repos.SetSize(msg.Width-h, msg.Height-v)
+		m.efforts.SetSize(msg.Width-h, msg.Height-v)
 	case errMsg:
 		m.err = msg
 		return m, nil

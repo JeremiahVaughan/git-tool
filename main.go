@@ -16,7 +16,16 @@ import (
 //go:embed schema/*
 var databaseFiles embed.FS
 
-var docStyle = lipgloss.NewStyle().Margin(1, 2)
+var docStyle = lipgloss.NewStyle().
+	Bold(true).
+	// Background(lipgloss.Color("#222222")).
+	// Foreground(lipgloss.Color("201")).
+	// Border(lipgloss.ThickBorder()).
+	// BorderStyle(lipgloss.RoundedBorder()).
+	// BorderForeground(lipgloss.Color("12")).
+	PaddingTop(2).
+	PaddingLeft(4).
+	Margin(1, 2)
 
 type model struct {
 	addNewRepo    textinput.Model
@@ -45,6 +54,16 @@ var deleteItemKeyBinding = key.NewBinding(
 var addItemKeyBinding = key.NewBinding(
 	key.WithKeys("a"),
 	key.WithHelp("a", "add"),
+)
+
+var navigateToEffortsBinding = key.NewBinding(
+	key.WithKeys("e"),
+	key.WithHelp("e", "efforts"),
+)
+
+var navigateToReposBinding = key.NewBinding(
+	key.WithKeys("r"),
+	key.WithHelp("r", "repos"),
 )
 
 func initModel() (model, error) {
@@ -98,11 +117,12 @@ func initModel() (model, error) {
 	effortTextInput.Width = 50
 
 	theRepos := list.New(repos, list.NewDefaultDelegate(), 0, 0) // will set width and height later
-	theRepos.Title = "Your Repos"
+	theRepos.Title = "Repos"
 	theRepos.AdditionalShortHelpKeys = func() []key.Binding {
 		return []key.Binding{
 			addItemKeyBinding,
 			deleteItemKeyBinding,
+			navigateToEffortsBinding,
 		}
 	}
 
@@ -112,6 +132,7 @@ func initModel() (model, error) {
 		return []key.Binding{
 			addItemKeyBinding,
 			deleteItemKeyBinding,
+			navigateToReposBinding,
 		}
 	}
 
