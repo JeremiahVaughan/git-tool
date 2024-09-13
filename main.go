@@ -28,13 +28,16 @@ var docStyle = lipgloss.NewStyle().
 	Margin(1, 2)
 
 type model struct {
-	addNewRepo    textinput.Model
-	addNewEffort  textinput.Model
-	repos         list.Model
-	efforts       list.Model
-	activeView    viewOption
-	err           error
-	validationMsg string
+	addNewRepo          textinput.Model
+	addNewEffort        textinput.Model
+	repos               list.Model
+	efforts             list.Model
+	effortRepoSelection []bool
+	selectedEffort      effort
+	activeView          viewOption
+	cursor              int
+	err                 error
+	validationMsg       string
 }
 
 type viewOption string
@@ -44,6 +47,7 @@ const (
 	activeViewListRepos    viewOption = "lr"
 	activeViewListEfforts  viewOption = "le"
 	activeViewAddNewEffort viewOption = "ane"
+	activeViewEditEffort   viewOption = "ee"
 )
 
 var deleteItemKeyBinding = key.NewBinding(

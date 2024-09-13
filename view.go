@@ -2,6 +2,7 @@ package main
 
 import (
 	"fmt"
+	"strings"
 
 	"github.com/charmbracelet/lipgloss"
 )
@@ -23,6 +24,29 @@ func (m model) View() string {
 			"Add an effort\n%s\n",
 			m.addNewEffort.View(),
 		)
+	case activeViewEditEffort:
+		// todo add filter mode
+		var availableRepos []string
+		for i, r := range m.repos.Items() {
+			theRepo := r.(repo)
+			var selectedMarker string
+			if m.effortRepoSelection[i] {
+				selectedMarker = "[x]"
+			} else {
+				selectedMarker = "[ ]"
+			}
+			itemDisplay := fmt.Sprintf("  %s %s", selectedMarker, theRepo.Title())
+			if m.cursor == i {
+				itemDisplay = lipgloss.NewStyle().Foreground(lipgloss.Color("201")).Render(itemDisplay)
+			}
+			availableRepos = append(availableRepos, itemDisplay)
+		}
+		display = fmt.Sprintf(
+			"Add repos to \"%s\"\n%s\n",
+			m.selectedEffort.Desc,
+			strings.Join(availableRepos, "\n"),
+		)
+
 	case activeViewListRepos:
 		display = docStyle.Render(m.repos.View())
 	case activeViewListEfforts:

@@ -29,6 +29,12 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 					m.activeView = activeViewListRepos
 					return m, cmd
 				}
+				switch msg.Type {
+				case tea.KeyEnter:
+					m.selectedEffort = m.efforts.SelectedItem().(effort)
+					m.effortRepoSelection = make([]bool, len(m.repos.Items()))
+					m.activeView = activeViewEditEffort
+				}
 			}
 		case activeViewListRepos:
 			if m.repos.FilterState() != list.Filtering {
@@ -87,6 +93,26 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				}
 				m.efforts.SetItems(efforts)
 				m.activeView = activeViewListEfforts
+			}
+		case activeViewEditEffort:
+			switch msg.Type {
+			case tea.KeyEsc:
+				m.activeView = activeViewListEfforts
+			case tea.KeyEnter:
+				// todo save selection to DB
+				m.activeView = activeViewListEfforts
+			case tea.KeySpace:
+				m.effortRepoSelection[m.cursor] = !m.effortRepoSelection[m.cursor]
+			}
+			switch msg.String() {
+			case "k":
+				if m.cursor > 0 {
+					m.cursor--
+				}
+			case "j":
+				if m.cursor < len(m.repos.Items())-1 {
+					m.cursor++
+				}
 			}
 		}
 	case tea.WindowSizeMsg:
