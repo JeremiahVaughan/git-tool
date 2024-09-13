@@ -32,9 +32,13 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				switch msg.Type {
 				case tea.KeyEnter:
 					m.selectedEffort = m.efforts.SelectedItem().(effort)
-					theRepoItems := updateVisualRepos(m.repos.Items(), "")
+					theRepoItems := updateRepos(
+						m.repos.Items(),
+						"",
+						m.effortRepoSelection,
+					)
 					m.repos.SetItems(theRepoItems)
-					m.effortRepoSelection = updateRepoSelections(m.repos.Items())
+					m.effortRepoSelection = updateRepoSelectionList(m.repos.Items())
 					m.activeView = activeViewEditEffort
 				}
 			}
@@ -110,9 +114,13 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				default:
 					m.cursor = 0
 					m.listFilterTextInput, cmd = m.listFilterTextInput.Update(msg)
-					theRepos := updateVisualRepos(m.repos.Items(), m.listFilterTextInput.Value())
+					theRepos := updateRepos(
+						m.repos.Items(),
+						m.listFilterTextInput.Value(),
+						m.effortRepoSelection,
+					)
 					m.repos.SetItems(theRepos)
-					m.effortRepoSelection = updateRepoSelections(m.repos.Items())
+					m.effortRepoSelection = updateRepoSelectionList(m.repos.Items())
 				}
 			} else {
 				switch msg.Type {
@@ -123,6 +131,14 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 					m.activeView = activeViewListEfforts
 				case tea.KeySpace:
 					m.effortRepoSelection[m.cursor].Selected = !m.effortRepoSelection[m.cursor].Selected
+					theRepos := updateRepos(
+						m.repos.Items(),
+						m.listFilterTextInput.Value(),
+						m.effortRepoSelection,
+					)
+					m.repos.SetItems(theRepos)
+					m.effortRepoSelection = updateRepoSelectionList(m.repos.Items())
+
 				}
 				switch msg.String() {
 				case "k":
@@ -137,9 +153,13 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 					m.listFilterLive = true
 					m.listFilterTextInput.Reset()
 					m.listFilterTextInput.Focus()
-					theRepos := updateVisualRepos(m.repos.Items(), m.listFilterTextInput.Value())
+					theRepos := updateRepos(
+						m.repos.Items(),
+						m.listFilterTextInput.Value(),
+						m.effortRepoSelection,
+					)
 					m.repos.SetItems(theRepos)
-					m.effortRepoSelection = updateRepoSelections(m.repos.Items())
+					m.effortRepoSelection = updateRepoSelectionList(m.repos.Items())
 					return m, cmd
 				}
 			}

@@ -36,7 +36,7 @@ func (m model) View() string {
 				selectedMarker = "[ ]"
 			}
 			repoTitle := theRepo.Title()
-			if m.listFilterLive || m.listFilterSet {
+			if m.listFilterLive || (m.listFilterSet && m.cursor != i) {
 				repoTitle = highlightFoundText(repoTitle, m.listFilterTextInput.Value())
 			}
 			itemDisplay := fmt.Sprintf("  %s %s", selectedMarker, repoTitle)

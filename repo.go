@@ -156,20 +156,24 @@ func fetchRepos() ([]list.Item, error) {
 	return repos, nil
 }
 
-func updateVisualRepos(allRepos []list.Item, searchString string) []list.Item {
+func updateRepos(allRepos []list.Item, searchString string, filteredSelectionList []repo) []list.Item {
+	filteredListIndex := 0
 	for i, r := range allRepos {
 		theRepo := r.(repo)
-		if searchString == "" || strings.Contains(theRepo.Title(), searchString) {
-			theRepo.Visible = true
-		} else {
-			theRepo.Visible = false
+		if len(filteredSelectionList) > filteredListIndex {
+			filterRepo := filteredSelectionList[filteredListIndex]
+			if filterRepo.Id == theRepo.Id {
+				theRepo.Selected = filterRepo.Selected
+				filteredListIndex++
+			}
 		}
+		theRepo.Visible = searchString == "" || strings.Contains(theRepo.Title(), searchString)
 		allRepos[i] = theRepo
 	}
 	return allRepos
 }
 
-func updateRepoSelections(allRepos []list.Item) []repo {
+func updateRepoSelectionList(allRepos []list.Item) []repo {
 	var result []repo
 	for _, r := range allRepos {
 		theRepo := r.(repo)
