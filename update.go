@@ -32,7 +32,9 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				switch msg.Type {
 				case tea.KeyEnter:
 					m.selectedEffort = m.efforts.SelectedItem().(effort)
-					m.effortRepoSelection = make([]bool, len(m.repos.Items()))
+					theRepoItems := updateVisualRepos(m.repos.Items(), "")
+					m.repos.SetItems(theRepoItems)
+					m.effortRepoSelection = updateRepoSelections(m.repos.Items())
 					m.activeView = activeViewEditEffort
 				}
 			}
@@ -53,14 +55,14 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			case tea.KeyEsc:
 				m.activeView = activeViewListRepos
 			case tea.KeyEnter:
-				validationMsg, err := addRepo(m.addNewRepo.Value())
+				validationMsg, err := addRepo(m.addNewRepoTextInput.Value())
 				if err != nil || validationMsg != "" {
 					m.err = err
 					m.validationMsg = validationMsg
 					return m, cmd
 				}
 				m.err = nil
-				m.addNewRepo.Reset()
+				m.addNewRepoTextInput.Reset()
 				m.validationMsg = ""
 
 				repos, err := fetchRepos()
@@ -76,14 +78,14 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			case tea.KeyEsc:
 				m.activeView = activeViewListEfforts
 			case tea.KeyEnter:
-				validationMsg, err := addEffort(m.addNewEffort.Value())
+				validationMsg, err := addEffort(m.addNewEffortTextInput.Value())
 				if err != nil || validationMsg != "" {
 					m.err = err
 					m.validationMsg = validationMsg
 					return m, cmd
 				}
 				m.err = nil
-				m.addNewEffort.Reset()
+				m.addNewEffortTextInput.Reset()
 				m.validationMsg = ""
 
 				efforts, err := fetchEfforts()
@@ -95,23 +97,50 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.activeView = activeViewListEfforts
 			}
 		case activeViewEditEffort:
-			switch msg.Type {
-			case tea.KeyEsc:
-				m.activeView = activeViewListEfforts
-			case tea.KeyEnter:
-				// todo save selection to DB
-				m.activeView = activeViewListEfforts
-			case tea.KeySpace:
-				m.effortRepoSelection[m.cursor] = !m.effortRepoSelection[m.cursor]
-			}
-			switch msg.String() {
-			case "k":
-				if m.cursor > 0 {
-					m.cursor--
+			if m.listFilterLive {
+				switch msg.Type {
+				case tea.KeyEsc:
+					m.listFilterLive = false
+					m.listFilterSet = false
+					m.listFilterTextInput.Reset()
+				case tea.KeyEnter:
+					m.listFilterSet = true
+					m.listFilterLive = false
+					m.listFilterTextInput.Blur()
+				default:
+					m.cursor = 0
+					m.listFilterTextInput, cmd = m.listFilterTextInput.Update(msg)
+					theRepos := updateVisualRepos(m.repos.Items(), m.listFilterTextInput.Value())
+					m.repos.SetItems(theRepos)
+					m.effortRepoSelection = updateRepoSelections(m.repos.Items())
 				}
-			case "j":
-				if m.cursor < len(m.repos.Items())-1 {
-					m.cursor++
+			} else {
+				switch msg.Type {
+				case tea.KeyEsc:
+					m.activeView = activeViewListEfforts
+				case tea.KeyEnter:
+					// todo save selection to DB
+					m.activeView = activeViewListEfforts
+				case tea.KeySpace:
+					m.effortRepoSelection[m.cursor].Selected = !m.effortRepoSelection[m.cursor].Selected
+				}
+				switch msg.String() {
+				case "k":
+					if m.cursor > 0 {
+						m.cursor--
+					}
+				case "j":
+					if m.cursor < len(m.effortRepoSelection)-1 {
+						m.cursor++
+					}
+				case "/":
+					m.listFilterLive = true
+					m.listFilterTextInput.Reset()
+					m.listFilterTextInput.Focus()
+					theRepos := updateVisualRepos(m.repos.Items(), m.listFilterTextInput.Value())
+					m.repos.SetItems(theRepos)
+					m.effortRepoSelection = updateRepoSelections(m.repos.Items())
+					return m, cmd
 				}
 			}
 		}
@@ -129,11 +158,11 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case activeViewListRepos:
 		m.repos, cmd = m.repos.Update(msg)
 	case activeViewAddNewRepo:
-		m.addNewRepo, cmd = m.addNewRepo.Update(msg)
+		m.addNewRepoTextInput, cmd = m.addNewRepoTextInput.Update(msg)
 	case activeViewListEfforts:
 		m.efforts, cmd = m.efforts.Update(msg)
 	case activeViewAddNewEffort:
-		m.addNewEffort, cmd = m.addNewEffort.Update(msg)
+		m.addNewEffortTextInput, cmd = m.addNewEffortTextInput.Update(msg)
 	}
 	return m, cmd
 }

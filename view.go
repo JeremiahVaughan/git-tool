@@ -7,6 +7,8 @@ import (
 	"github.com/charmbracelet/lipgloss"
 )
 
+var highlightStyle = lipgloss.NewStyle().Bold(true).Background(lipgloss.Color("226")).Foreground(lipgloss.Color("#000000"))
+
 func (m model) View() string {
 	if m.err != nil {
 		return getErrorStyle(m.err.Error())
@@ -17,36 +19,39 @@ func (m model) View() string {
 	case activeViewAddNewRepo:
 		display = fmt.Sprintf(
 			"Add a repo\n%s\n",
-			m.addNewRepo.View(),
+			m.addNewRepoTextInput.View(),
 		)
 	case activeViewAddNewEffort:
 		display = fmt.Sprintf(
 			"Add an effort\n%s\n",
-			m.addNewEffort.View(),
+			m.addNewEffortTextInput.View(),
 		)
 	case activeViewEditEffort:
-		// todo add filter mode
 		var availableRepos []string
-		for i, r := range m.repos.Items() {
-			theRepo := r.(repo)
+		for i, theRepo := range m.effortRepoSelection {
 			var selectedMarker string
-			if m.effortRepoSelection[i] {
+			if theRepo.Selected {
 				selectedMarker = "[x]"
 			} else {
 				selectedMarker = "[ ]"
 			}
-			itemDisplay := fmt.Sprintf("  %s %s", selectedMarker, theRepo.Title())
-			if m.cursor == i {
+			repoTitle := theRepo.Title()
+			if m.listFilterLive || m.listFilterSet {
+				repoTitle = highlightFoundText(repoTitle, m.listFilterTextInput.Value())
+			}
+			itemDisplay := fmt.Sprintf("  %s %s", selectedMarker, repoTitle)
+			if m.cursor == i && !m.listFilterLive {
 				itemDisplay = lipgloss.NewStyle().Foreground(lipgloss.Color("201")).Render(itemDisplay)
 			}
 			availableRepos = append(availableRepos, itemDisplay)
 		}
+		title := fmt.Sprintf("Add repos to \"%s\"\n", m.selectedEffort.Desc)
+		title += m.listFilterTextInput.View()
 		display = fmt.Sprintf(
-			"Add repos to \"%s\"\n%s\n",
-			m.selectedEffort.Desc,
+			"%s\n%s",
+			title,
 			strings.Join(availableRepos, "\n"),
 		)
-
 	case activeViewListRepos:
 		display = docStyle.Render(m.repos.View())
 	case activeViewListEfforts:
@@ -63,4 +68,18 @@ func (m model) View() string {
 func getErrorStyle(errMsg string) string {
 	errorStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("1")).Bold(true).Width(80)
 	return fmt.Sprintf("\n%v", errorStyle.Render(errMsg))
+}
+
+func highlightFoundText(str string, substr string) string {
+	if !strings.Contains(str, substr) {
+		return str
+	}
+
+	prefixAndSuffix := strings.SplitN(str, substr, 2)
+	before := prefixAndSuffix[0]
+	after := prefixAndSuffix[1]
+
+	highlightedSubstr := highlightStyle.Render(substr)
+
+	return before + highlightedSubstr + after
 }

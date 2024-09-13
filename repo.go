@@ -17,6 +17,8 @@ type repo struct {
 	Id          int64
 	Url         string
 	TrunkBranch string
+	Selected    bool
+	Visible     bool
 }
 
 func (r repo) Title() string {
@@ -152,4 +154,31 @@ func fetchRepos() ([]list.Item, error) {
 		repos = []list.Item{}
 	}
 	return repos, nil
+}
+
+func updateVisualRepos(allRepos []list.Item, searchString string) []list.Item {
+	for i, r := range allRepos {
+		theRepo := r.(repo)
+		if searchString == "" || strings.Contains(theRepo.Title(), searchString) {
+			theRepo.Visible = true
+		} else {
+			theRepo.Visible = false
+		}
+		allRepos[i] = theRepo
+	}
+	return allRepos
+}
+
+func updateRepoSelections(allRepos []list.Item) []repo {
+	var result []repo
+	for _, r := range allRepos {
+		theRepo := r.(repo)
+		if theRepo.Visible {
+			result = append(result, theRepo)
+		}
+	}
+	if len(result) == 0 {
+		return []repo{}
+	}
+	return result
 }

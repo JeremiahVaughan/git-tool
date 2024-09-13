@@ -18,6 +18,7 @@ type effort struct {
 	Repos []repo
 }
 
+
 func (e effort) Title() string {
 	return e.Name
 }

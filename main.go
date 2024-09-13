@@ -28,16 +28,21 @@ var docStyle = lipgloss.NewStyle().
 	Margin(1, 2)
 
 type model struct {
-	addNewRepo          textinput.Model
-	addNewEffort        textinput.Model
-	repos               list.Model
-	efforts             list.Model
-	effortRepoSelection []bool
-	selectedEffort      effort
-	activeView          viewOption
-	cursor              int
-	err                 error
-	validationMsg       string
+	addNewRepoTextInput   textinput.Model
+	addNewEffortTextInput textinput.Model
+	listFilterTextInput   textinput.Model
+	repos                 list.Model
+	efforts               list.Model
+	effortRepoSelection   []repo
+	selectedEffort        effort
+	activeView            viewOption
+	// a filter is being created
+	listFilterLive bool
+	// a filter has been applied to the list
+	listFilterSet bool
+	cursor        int
+	err           error
+	validationMsg string
 }
 
 type viewOption string
@@ -120,6 +125,11 @@ func initModel() (model, error) {
 	effortTextInput.CharLimit = 256
 	effortTextInput.Width = 50
 
+	listFilter := textinput.New()
+	listFilter.Placeholder = "no active filter"
+	listFilter.CharLimit = 50
+	listFilter.Width = 50
+
 	theRepos := list.New(repos, list.NewDefaultDelegate(), 0, 0) // will set width and height later
 	theRepos.Title = "Repos"
 	theRepos.AdditionalShortHelpKeys = func() []key.Binding {
@@ -141,12 +151,13 @@ func initModel() (model, error) {
 	}
 
 	return model{
-		addNewRepo:   repoTextInput,
-		addNewEffort: effortTextInput,
-		repos:        theRepos,
-		activeView:   activeViewListEfforts,
-		efforts:      theEfforts,
-		err:          nil,
+		addNewRepoTextInput:   repoTextInput,
+		addNewEffortTextInput: effortTextInput,
+		listFilterTextInput:   listFilter,
+		repos:                 theRepos,
+		activeView:            activeViewListEfforts,
+		efforts:               theEfforts,
+		err:                   nil,
 	}, nil
 }
 
