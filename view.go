@@ -39,35 +39,41 @@ func (m model) View() string {
 			if m.listFilterLive || (m.listFilterSet && m.cursor != i) {
 				repoTitle = highlightFoundText(repoTitle, m.listFilterTextInput.Value())
 			}
-			itemDisplay := fmt.Sprintf("  %s %s", selectedMarker, repoTitle)
+			itemDisplay := fmt.Sprintf("%s %s", selectedMarker, repoTitle)
+			itemDisplay = lipgloss.NewStyle().MarginLeft(2).Render(itemDisplay)
 			if m.cursor == i && !m.listFilterLive {
 				itemDisplay = lipgloss.NewStyle().Foreground(lipgloss.Color("201")).Render(itemDisplay)
 			}
 			availableRepos = append(availableRepos, itemDisplay)
 		}
-		title := fmt.Sprintf("Add repos to \"%s\"\n", m.selectedEffort.Desc)
-		title += m.listFilterTextInput.View()
+		title := fmt.Sprintf("Add repos to \"%s\"", m.selectedEffort.Desc)
+		title = lipgloss.NewStyle().
+			Background(lipgloss.Color("#7d34eb")).
+			Foreground(lipgloss.Color("#DDDDDD")).
+			Padding(1).
+			Render(title)
+		textInput := lipgloss.NewStyle().Padding(1).Render(m.listFilterTextInput.View())
 		display = fmt.Sprintf(
-			"%s\n%s",
+			"%s\n%s\n%s",
 			title,
+			textInput,
 			strings.Join(availableRepos, "\n"),
 		)
 	case activeViewListRepos:
-		display = docStyle.Render(m.repos.View())
+		display = m.repos.View()
 	case activeViewListEfforts:
-		display = docStyle.Render(m.efforts.View())
+		display = m.efforts.View()
 	}
 
 	if m.validationMsg != "" {
 		display += getErrorStyle(m.validationMsg)
 	}
-
-	return display
+	return docStyle.Render(display)
 }
 
 func getErrorStyle(errMsg string) string {
-	errorStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("1")).Bold(true).Width(80)
-	return fmt.Sprintf("\n%v", errorStyle.Render(errMsg))
+	errorStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("1")).Bold(true).Width(80).MarginLeft(4)
+	return fmt.Sprintf("\n\n%v", errorStyle.Render(errMsg))
 }
 
 func highlightFoundText(str string, substr string) string {

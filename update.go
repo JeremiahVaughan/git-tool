@@ -127,7 +127,13 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				case tea.KeyEsc:
 					m.activeView = activeViewListEfforts
 				case tea.KeyEnter:
-					// todo save selection to DB
+					validationMsg, err := applyRepoSelectionForEffort(m.repos.Items())
+					if err != nil || validationMsg != "" {
+						m.err = err
+						m.validationMsg = validationMsg
+						return m, cmd
+					}
+					m.effortRepoSelection = resetRepoSelection(m.effortRepoSelection)
 					m.activeView = activeViewListEfforts
 				case tea.KeySpace:
 					m.effortRepoSelection[m.cursor].Selected = !m.effortRepoSelection[m.cursor].Selected

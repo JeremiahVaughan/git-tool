@@ -186,3 +186,12 @@ func updateRepoSelectionList(allRepos []list.Item) []repo {
 	}
 	return result
 }
+
+func resetRepoSelection(repos []repo) []repo {
+	for i, r := range repos {
+		r.Visible = true
+		r.Selected = false
+		repos[i] = r
+	}
+	return repos
+}

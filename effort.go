@@ -18,7 +18,6 @@ type effort struct {
 	Repos []repo
 }
 
-
 func (e effort) Title() string {
 	return e.Name
 }
@@ -131,4 +130,61 @@ func fetchEfforts() ([]list.Item, error) {
 	}
 
 	return efforts, nil
+}
+
+func applyRepoSelectionForEffort(repos []list.Item) (string, error) {
+	var selected []repo
+	for _, r := range repos {
+		theRepo := r.(repo)
+		if theRepo.Selected {
+			selected = append(selected, theRepo)
+		}
+	}
+	if len(selected) == 0 {
+		return "must select at least one repo", nil
+	}
+
+	var wg sync.WaitGroup
+	errChan := make(chan error, 1)
+
+	for _, theRepo := range repos {
+		wg.Add(1)
+		go func(r repo) {
+			defer wg.Done()
+			e := createWorktree(r)
+			if e != nil {
+				errChan <- fmt.Errorf("error, when createWorktree() for applyRepoSelectionForEffort() of key: %s. Error: %v", r.Title(), e)
+				return
+			}
+		}(theRepo.(repo))
+	}
+
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		var e error
+		e = persistRepoSelection(selected)
+		if e != nil {
+			errChan <- fmt.Errorf("error, when persistRepoSelection() for applyRepoSelectionForEffort(). Error: %v", e)
+			return
+		}
+	}()
+
+	go func() {
+		wg.Wait()
+		close(errChan)
+	}()
+
+	if errChanError := <-errChan; errChanError != nil {
+		return "", fmt.Errorf("error, when attempting to fetch data. Error: %v", errChanError)
+	}
+	return "", nil
+}
+
+func createWorktree(r repo) error {
+	// todo implement
+}
+
+func persistRepoSelection(r []repo) error {
+	// todo implement
 }
