@@ -132,7 +132,7 @@ func fetchEfforts() ([]list.Item, error) {
 	return efforts, nil
 }
 
-func applyRepoSelectionForEffort(repos []list.Item) (string, error) {
+func applyRepoSelectionForEffort(effortId int64, repos []list.Item) (string, error) {
 	var selected []repo
 	for _, r := range repos {
 		theRepo := r.(repo)
@@ -163,7 +163,7 @@ func applyRepoSelectionForEffort(repos []list.Item) (string, error) {
 	go func() {
 		defer wg.Done()
 		var e error
-		e = persistRepoSelection(selected)
+		e = persistRepoSelection(effortId, selected)
 		if e != nil {
 			errChan <- fmt.Errorf("error, when persistRepoSelection() for applyRepoSelectionForEffort(). Error: %v", e)
 			return
@@ -185,6 +185,53 @@ func createWorktree(r repo) error {
 	// todo implement
 }
 
-func persistRepoSelection(r []repo) error {
+func persistRepoSelection(effortId int64, repos []repo) error {
+	deleteAnyNoLongerSelected(effortId, repos)
+
+	insertStatement := generateInsertStatement(repos)
 	// todo implement
+}
+
+func generateInsertStatement(repos []repo) string {
+	columns := []string{"effort_id", "repo_id"}
+	result := `INSERT INTO effort_repo (%s)
+		VALUES %s`
+	placeholders := make([]string, len(repos))
+	for i := range repos {
+		innerPlaceholders := make([]string, len(columns))
+		for j := range columns {
+			innerPlaceholders[j] = "?"
+		}
+		placeholders[i] = "(" + strings.Join(innerPlaceholders, ", ") + ")"
+	}
+	result = fmt.Sprintf(
+		result,
+		strings.Join(columns, ", "),
+		strings.Join(placeholders, ", "),
+	)
+	return result
+}
+
+func deleteAnyNoLongerSelected(effortId int64, repos []repo) error {
+	placeholders := make([]string, len(repos))
+	args := make([]any, len(repos)+1)
+	args[0] = effortId
+	for i, r := range repos {
+		placeholders = append(placeholders, "?")
+		args[i+1] = r.Id
+	}
+	deleteStatement := fmt.Sprintf(
+		`DELETE FROM effort_repo
+		WHERE effort_id = ?
+		AND repo_id NOT IN (%s)`,
+		strings.Join(placeholders, ", "),
+	)
+	_, err := database.Exec(
+		deleteStatement,
+		args...,
+	)
+	if err != nil {
+		return fmt.Errorf("error, when executing sql statement. Error: %v", err)
+	}
+	return nil
 }

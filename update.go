@@ -127,7 +127,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				case tea.KeyEsc:
 					m.activeView = activeViewListEfforts
 				case tea.KeyEnter:
-					validationMsg, err := applyRepoSelectionForEffort(m.repos.Items())
+					validationMsg, err := applyRepoSelectionForEffort(m.selectedEffort.Id, m.repos.Items())
 					if err != nil || validationMsg != "" {
 						m.err = err
 						m.validationMsg = validationMsg
