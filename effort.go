@@ -176,25 +176,49 @@ func applyRepoSelectionForEffort(effortId int64, repos []list.Item) (string, err
 	}()
 
 	if errChanError := <-errChan; errChanError != nil {
-		return "", fmt.Errorf("error, when attempting to fetch data. Error: %v", errChanError)
+		return "", fmt.Errorf("error, when attempting perform async actions. Error: %v", errChanError)
 	}
 	return "", nil
 }
 
 func createWorktree(r repo) error {
 	// todo implement
+	return nil
+}
+
+func fetchRepoSelections(effortId int64) ([]repo, error) {
+	// todo implement
+	return nil, nil
 }
 
 func persistRepoSelection(effortId int64, repos []repo) error {
-	deleteAnyNoLongerSelected(effortId, repos)
+	err := deleteAnyNoLongerSelected(effortId, repos)
+	if err != nil {
+		return fmt.Errorf("error, when deleteAnyNoLongerSelected() for persistRepoSelection(). Error: %v", err)
+	}
 
+	till := len(repos) * 2
+	args := make([]any, till)
+	j := 0
+	for i := 0; i < till; i += 2 {
+		args[i] = effortId
+		args[i+1] = repos[j].Id
+		j++
+	}
 	insertStatement := generateInsertStatement(repos)
-	// todo implement
+	_, err = database.Exec(
+		insertStatement,
+		args...,
+	)
+	if err != nil {
+		return fmt.Errorf("error, when executing insert records statement for persistRepoSelection(). Error: %v", err)
+	}
+	return nil
 }
 
 func generateInsertStatement(repos []repo) string {
 	columns := []string{"effort_id", "repo_id"}
-	result := `INSERT INTO effort_repo (%s)
+	result := `INSERT OR IGNORE INTO effort_repo (%s)
 		VALUES %s`
 	placeholders := make([]string, len(repos))
 	for i := range repos {
@@ -217,7 +241,7 @@ func deleteAnyNoLongerSelected(effortId int64, repos []repo) error {
 	args := make([]any, len(repos)+1)
 	args[0] = effortId
 	for i, r := range repos {
-		placeholders = append(placeholders, "?")
+		placeholders[i] = "?"
 		args[i+1] = r.Id
 	}
 	deleteStatement := fmt.Sprintf(
@@ -231,7 +255,7 @@ func deleteAnyNoLongerSelected(effortId int64, repos []repo) error {
 		args...,
 	)
 	if err != nil {
-		return fmt.Errorf("error, when executing sql statement. Error: %v", err)
+		return fmt.Errorf("error, when executing sql statement. Statement: %s. Error: %v", deleteStatement, err)
 	}
 	return nil
 }
