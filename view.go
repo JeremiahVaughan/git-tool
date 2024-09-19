@@ -28,7 +28,7 @@ func (m model) View() string {
 		)
 	case activeViewEditEffort:
 		var availableRepos []string
-		for i, theRepo := range m.effortRepoSelection {
+		for i, theRepo := range m.effortRepoVisibleSelection {
 			var selectedMarker string
 			if theRepo.Selected {
 				selectedMarker = "[x]"

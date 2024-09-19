@@ -160,6 +160,7 @@ func updateRepos(allRepos []list.Item, searchString string, filteredSelectionLis
 	filteredListIndex := 0
 	for i, r := range allRepos {
 		theRepo := r.(repo)
+		// make selections made through filtered list apply to actual list
 		if len(filteredSelectionList) > filteredListIndex {
 			filterRepo := filteredSelectionList[filteredListIndex]
 			if filterRepo.Id == theRepo.Id {
@@ -167,13 +168,14 @@ func updateRepos(allRepos []list.Item, searchString string, filteredSelectionLis
 				filteredListIndex++
 			}
 		}
+		// set visible state based on filter value
 		theRepo.Visible = searchString == "" || strings.Contains(theRepo.Title(), searchString)
 		allRepos[i] = theRepo
 	}
 	return allRepos
 }
 
-func updateRepoSelectionList(allRepos []list.Item) []repo {
+func updateRepoVisibleSelectionList(allRepos []list.Item) []repo {
 	var result []repo
 	for _, r := range allRepos {
 		theRepo := r.(repo)

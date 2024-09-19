@@ -259,3 +259,60 @@ func deleteAnyNoLongerSelected(effortId int64, repos []repo) error {
 	}
 	return nil
 }
+
+func fetchSelectedReposForEffort(effortId int64, allRepos list.Model) ([]list.Item, error) {
+	rows, err := database.Query(
+		`SELECT repo_id
+		FROM effort_repo
+		WHERE effort_id = ?`,
+		effortId,
+	)
+
+	defer func(rows *sql.Rows) {
+		if rows != nil {
+			closeRowsError := rows.Close()
+			if closeRowsError != nil {
+				// no choice but to log the error since defer doesn't let us return errors
+				// defer is needed though because it ensures a cleanup attempt is made even if we should return early due to an error
+				log.Printf("error, when attempting to close database rows: %v", closeRowsError)
+			}
+		}
+	}(rows)
+
+	if err != nil {
+		return nil, fmt.Errorf("error, when attempting to retrieve records. Error: %v", err)
+	}
+
+	// selectedReposMap key is repo id and value doesn't matter
+	selectedReposMap := make(map[int64]bool)
+	for rows.Next() {
+		var id int64
+		err = rows.Scan(
+			&id,
+		)
+		if err != nil {
+			return nil, fmt.Errorf("error, when scanning database rows. Error: %v", err)
+		}
+		selectedReposMap[id] = true
+	}
+
+	err = rows.Err()
+	if err != nil {
+		return nil, fmt.Errorf("error, when iterating through database rows. Error: %v", err)
+	}
+
+	result := make([]list.Item, len(allRepos.Items()))
+	for i, r := range allRepos.Items() {
+		theRepo := r.(repo)
+		_, ok := selectedReposMap[theRepo.Id]
+		if ok {
+			theRepo.Selected = true
+		} else {
+			theRepo.Selected = false
+		}
+		theRepo.Visible = true
+		result[i] = theRepo
+	}
+	return result, nil
+
+}

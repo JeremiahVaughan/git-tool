@@ -9,6 +9,10 @@ import (
 )
 
 func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
+	// reset any errors or validation messages
+	m.err = nil
+	m.validationMsg = ""
+
 	var cmd tea.Cmd
 
 	switch msg := msg.(type) {
@@ -32,13 +36,14 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				switch msg.Type {
 				case tea.KeyEnter:
 					m.selectedEffort = m.efforts.SelectedItem().(effort)
-					theRepoItems := updateRepos(
-						m.repos.Items(),
-						"",
-						m.effortRepoSelection,
-					)
+					theRepoItems, err := fetchSelectedReposForEffort(m.selectedEffort.Id, m.repos)
+					if err != nil {
+						m.err = fmt.Errorf("error, when fetchSelectedReposForEffort() for Update(). Error: %v", err)
+						return m, cmd
+					}
+
 					m.repos.SetItems(theRepoItems)
-					m.effortRepoSelection = updateRepoSelectionList(m.repos.Items())
+					m.effortRepoVisibleSelection = updateRepoVisibleSelectionList(m.repos.Items())
 					m.activeView = activeViewEditEffort
 				}
 			}
@@ -117,10 +122,10 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 					theRepos := updateRepos(
 						m.repos.Items(),
 						m.listFilterTextInput.Value(),
-						m.effortRepoSelection,
+						m.effortRepoVisibleSelection,
 					)
 					m.repos.SetItems(theRepos)
-					m.effortRepoSelection = updateRepoSelectionList(m.repos.Items())
+					m.effortRepoVisibleSelection = updateRepoVisibleSelectionList(m.repos.Items())
 				}
 			} else {
 				switch msg.Type {
@@ -133,17 +138,17 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 						m.validationMsg = validationMsg
 						return m, cmd
 					}
-					m.effortRepoSelection = resetRepoSelection(m.effortRepoSelection)
+					m.effortRepoVisibleSelection = resetRepoSelection(m.effortRepoVisibleSelection)
 					m.activeView = activeViewListEfforts
 				case tea.KeySpace:
-					m.effortRepoSelection[m.cursor].Selected = !m.effortRepoSelection[m.cursor].Selected
+					m.effortRepoVisibleSelection[m.cursor].Selected = !m.effortRepoVisibleSelection[m.cursor].Selected
 					theRepos := updateRepos(
 						m.repos.Items(),
 						m.listFilterTextInput.Value(),
-						m.effortRepoSelection,
+						m.effortRepoVisibleSelection,
 					)
 					m.repos.SetItems(theRepos)
-					m.effortRepoSelection = updateRepoSelectionList(m.repos.Items())
+					m.effortRepoVisibleSelection = updateRepoVisibleSelectionList(m.repos.Items())
 
 				}
 				switch msg.String() {
@@ -152,7 +157,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 						m.cursor--
 					}
 				case "j":
-					if m.cursor < len(m.effortRepoSelection)-1 {
+					if m.cursor < len(m.effortRepoVisibleSelection)-1 {
 						m.cursor++
 					}
 				case "/":
@@ -162,10 +167,10 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 					theRepos := updateRepos(
 						m.repos.Items(),
 						m.listFilterTextInput.Value(),
-						m.effortRepoSelection,
+						m.effortRepoVisibleSelection,
 					)
 					m.repos.SetItems(theRepos)
-					m.effortRepoSelection = updateRepoSelectionList(m.repos.Items())
+					m.effortRepoVisibleSelection = updateRepoVisibleSelectionList(m.repos.Items())
 					return m, cmd
 				}
 			}

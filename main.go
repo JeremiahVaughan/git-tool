@@ -28,7 +28,7 @@ type model struct {
 	listFilterTextInput   textinput.Model
 	repos                 list.Model
 	efforts               list.Model
-	effortRepoSelection   []repo
+	effortRepoVisibleSelection   []repo
 	selectedEffort        effort
 	activeView            viewOption
 	// a filter is being created
