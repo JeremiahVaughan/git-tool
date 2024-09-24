@@ -186,11 +186,6 @@ func createWorktree(r repo) error {
 	return nil
 }
 
-func fetchRepoSelections(effortId int64) ([]repo, error) {
-	// todo implement
-	return nil, nil
-}
-
 func persistRepoSelection(effortId int64, repos []repo) error {
 	err := deleteAnyNoLongerSelected(effortId, repos)
 	if err != nil {
