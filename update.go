@@ -87,14 +87,18 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			case tea.KeyEsc:
 				m.activeView = activeViewListEfforts
 			case tea.KeyEnter:
-				validationMsg, err := addEffort(m.addNewEffortTextInput.Value())
+				validationMsg, err := addEffort(
+					m.addNewEffortNameTextInput.Value(),
+					m.addNewEffortBranchNameTextInput.Value(),
+				)
 				if err != nil || validationMsg != "" {
 					m.err = err
 					m.validationMsg = validationMsg
 					return m, cmd
 				}
 				m.err = nil
-				m.addNewEffortTextInput.Reset()
+				m.addNewEffortNameTextInput.Reset()
+				m.addNewEffortBranchNameTextInput.Reset()
 				m.validationMsg = ""
 
 				efforts, err := fetchEfforts()
@@ -104,6 +108,14 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				}
 				m.efforts.SetItems(efforts)
 				m.activeView = activeViewListEfforts
+			case tea.KeyTab:
+				if m.addNewEffortNameTextInput.Focused() {
+					m.addNewEffortBranchNameTextInput.Focus()
+					m.addNewEffortNameTextInput.Blur()
+				} else {
+					m.addNewEffortNameTextInput.Focus()
+					m.addNewEffortBranchNameTextInput.Blur()
+				}
 			}
 		case activeViewEditEffort:
 			if m.listFilterLive {
@@ -193,7 +205,8 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case activeViewListEfforts:
 		m.efforts, cmd = m.efforts.Update(msg)
 	case activeViewAddNewEffort:
-		m.addNewEffortTextInput, cmd = m.addNewEffortTextInput.Update(msg)
+		m.addNewEffortNameTextInput, cmd = m.addNewEffortNameTextInput.Update(msg)
+		m.addNewEffortBranchNameTextInput, cmd = m.addNewEffortBranchNameTextInput.Update(msg)
 	}
 	return m, cmd
 }

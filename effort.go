@@ -12,10 +12,11 @@ import (
 )
 
 type effort struct {
-	Id    int64
-	Name  string
-	Desc  string
-	Repos []repo
+	Id         int64
+	Name       string
+	BranchName string
+	Desc       string
+	Repos      []repo
 }
 
 func (e effort) Title() string {
@@ -24,14 +25,21 @@ func (e effort) Title() string {
 func (e effort) Description() string { return e.Desc }
 func (e effort) FilterValue() string { return e.Desc }
 
-func addEffort(value string) (string, error) {
-	value = strings.TrimSpace(value)
-	if value == "" {
-		return "must provide a value", nil
+func addEffort(effortName, branchName string) (string, error) {
+	effortName = strings.TrimSpace(effortName)
+
+	if effortName == "" {
+		return "must provide a name", nil
 	}
-	description := value
-	value = strings.ToLower(value)
-	name := strings.ReplaceAll(value, " ", "_")
+
+	description := effortName
+	effortName = strings.ToLower(effortName)
+	name := strings.ReplaceAll(effortName, " ", "_")
+
+	branchName = strings.TrimSpace(branchName)
+	if branchName == "" {
+		branchName = name
+	}
 
 	var wg sync.WaitGroup
 	errChan := make(chan error, 1)
@@ -58,9 +66,10 @@ func addEffort(value string) (string, error) {
 		defer wg.Done()
 		var e error
 		_, e = database.Exec(
-			`INSERT OR IGNORE INTO effort (name, description)
+			`INSERT OR IGNORE INTO effort (name, branch_name, description)
 			VALUES (?, ?)`,
 			name,
+			branchName,
 			description,
 		)
 		if e != nil {
@@ -83,7 +92,7 @@ func addEffort(value string) (string, error) {
 
 func fetchEfforts() ([]list.Item, error) {
 	rows, err := database.Query(
-		`SELECT id, name, description
+		`SELECT id, name, branch_name, description
 		FROM effort e`,
 	)
 
@@ -108,6 +117,7 @@ func fetchEfforts() ([]list.Item, error) {
 		err = rows.Scan(
 			&r.Id,
 			&r.Name,
+			&r.BranchName,
 			&r.Desc,
 		)
 		if err != nil {
@@ -200,7 +210,7 @@ func persistRepoSelection(effortId int64, repos []repo) error {
 		args[i+1] = repos[j].Id
 		j++
 	}
-	insertStatement := generateInsertStatement(repos)
+	insertStatement := generateRepoSelectionInsertStatement(repos)
 	_, err = database.Exec(
 		insertStatement,
 		args...,
@@ -211,7 +221,7 @@ func persistRepoSelection(effortId int64, repos []repo) error {
 	return nil
 }
 
-func generateInsertStatement(repos []repo) string {
+func generateRepoSelectionInsertStatement(repos []repo) string {
 	columns := []string{"effort_id", "repo_id"}
 	result := `INSERT OR IGNORE INTO effort_repo (%s)
 		VALUES %s`

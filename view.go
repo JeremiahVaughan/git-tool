@@ -23,8 +23,9 @@ func (m model) View() string {
 		)
 	case activeViewAddNewEffort:
 		display = fmt.Sprintf(
-			"Add an effort\n%s\n",
-			m.addNewEffortTextInput.View(),
+			"Add an effort\n\nEffort name\n%s\n\nBranch Name\n%s\n",
+			m.addNewEffortNameTextInput.View(),
+			m.addNewEffortBranchNameTextInput.View(),
 		)
 	case activeViewEditEffort:
 		var availableRepos []string

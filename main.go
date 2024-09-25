@@ -23,14 +23,15 @@ var docStyle = lipgloss.NewStyle().
 	Margin(1, 2)
 
 type model struct {
-	addNewRepoTextInput   textinput.Model
-	addNewEffortTextInput textinput.Model
-	listFilterTextInput   textinput.Model
-	repos                 list.Model
-	efforts               list.Model
-	effortRepoVisibleSelection   []repo
-	selectedEffort        effort
-	activeView            viewOption
+	addNewRepoTextInput             textinput.Model
+	addNewEffortNameTextInput       textinput.Model
+	addNewEffortBranchNameTextInput textinput.Model
+	listFilterTextInput             textinput.Model
+	repos                           list.Model
+	efforts                         list.Model
+	effortRepoVisibleSelection      []repo
+	selectedEffort                  effort
+	activeView                      viewOption
 	// a filter is being created
 	listFilterLive bool
 	// a filter has been applied to the list
@@ -116,9 +117,14 @@ func initModel() (model, error) {
 
 	effortTextInput := textinput.New()
 	effortTextInput.Placeholder = "create UI to display inventory"
-	effortTextInput.Focus()
 	effortTextInput.CharLimit = 256
 	effortTextInput.Width = 50
+	effortTextInput.Focus()
+
+	effortBranchNameTextInput := textinput.New()
+	effortBranchNameTextInput.Placeholder = "Ticket ID"
+	effortBranchNameTextInput.CharLimit = 32
+	effortBranchNameTextInput.Width = 50
 
 	listFilter := textinput.New()
 	listFilter.Placeholder = "no active filter"
@@ -146,13 +152,14 @@ func initModel() (model, error) {
 	}
 
 	return model{
-		addNewRepoTextInput:   repoTextInput,
-		addNewEffortTextInput: effortTextInput,
-		listFilterTextInput:   listFilter,
-		repos:                 theRepos,
-		activeView:            activeViewListEfforts,
-		efforts:               theEfforts,
-		err:                   nil,
+		addNewRepoTextInput:             repoTextInput,
+		addNewEffortNameTextInput:       effortTextInput,
+		addNewEffortBranchNameTextInput: effortBranchNameTextInput,
+		listFilterTextInput:             listFilter,
+		repos:                           theRepos,
+		activeView:                      activeViewListEfforts,
+		efforts:                         theEfforts,
+		err:                             nil,
 	}, nil
 }
 

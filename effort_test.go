@@ -11,7 +11,7 @@ func Test_generateInsertStatement(t *testing.T) {
 		{Id: 2},
 		{Id: 3},
 	}
-	got := generateInsertStatement(repos)
+	got := generateRepoSelectionInsertStatement(repos)
 	expected := `INSERT OR IGNORE INTO effort_repo (effort_id, repo_id)
 		VALUES (?, ?), (?, ?), (?, ?)`
 	gotNoSpaces := strings.ReplaceAll(got, " ", "")
