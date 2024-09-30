@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"log"
 	"os"
+	"os/exec"
 	"strings"
 	"sync"
 
@@ -27,7 +28,6 @@ func (e effort) FilterValue() string { return e.Desc }
 
 func addEffort(effortName, branchName string) (string, error) {
 	effortName = strings.TrimSpace(effortName)
-
 	if effortName == "" {
 		return "must provide a name", nil
 	}
@@ -67,13 +67,13 @@ func addEffort(effortName, branchName string) (string, error) {
 		var e error
 		_, e = database.Exec(
 			`INSERT OR IGNORE INTO effort (name, branch_name, description)
-			VALUES (?, ?)`,
+			VALUES (?, ?, ?)`,
 			name,
 			branchName,
 			description,
 		)
 		if e != nil {
-			errChan <- fmt.Errorf("error, when executing sql statement for addRepo(). Error: %v", e)
+			errChan <- fmt.Errorf("error, when executing sql statement to add effort. Error: %v", e)
 			return
 		}
 	}()
@@ -142,7 +142,7 @@ func fetchEfforts() ([]list.Item, error) {
 	return efforts, nil
 }
 
-func applyRepoSelectionForEffort(effortId int64, repos []list.Item) (string, error) {
+func applyRepoSelectionForEffort(theEffort effort, repos []list.Item) (string, error) {
 	var selected []repo
 	for _, r := range repos {
 		theRepo := r.(repo)
@@ -157,11 +157,17 @@ func applyRepoSelectionForEffort(effortId int64, repos []list.Item) (string, err
 	var wg sync.WaitGroup
 	errChan := make(chan error, 1)
 
+	effortDirectory := dataDirectory + theEffort.Name
+	err := os.MkdirAll(effortDirectory, os.ModePerm)
+	if err != nil {
+		return "", fmt.Errorf("error, when creating effort directory for applyRepoSelectionForEffort(). Error: %v", err)
+	}
+
 	for _, theRepo := range repos {
 		wg.Add(1)
 		go func(r repo) {
 			defer wg.Done()
-			e := createWorktree(r)
+			e := createWorktree(effortDirectory, theEffort, r)
 			if e != nil {
 				errChan <- fmt.Errorf("error, when createWorktree() for applyRepoSelectionForEffort() of key: %s. Error: %v", r.Title(), e)
 				return
@@ -173,7 +179,7 @@ func applyRepoSelectionForEffort(effortId int64, repos []list.Item) (string, err
 	go func() {
 		defer wg.Done()
 		var e error
-		e = persistRepoSelection(effortId, selected)
+		e = persistRepoSelection(theEffort.Id, selected)
 		if e != nil {
 			errChan <- fmt.Errorf("error, when persistRepoSelection() for applyRepoSelectionForEffort(). Error: %v", e)
 			return
@@ -191,8 +197,9 @@ func applyRepoSelectionForEffort(effortId int64, repos []list.Item) (string, err
 	return "", nil
 }
 
-func createWorktree(r repo) error {
-	// todo implement
+func createWorktree(effortDirectory string, theEffort effort, r repo) error {
+	cmd := exec.Command("git", "worktree", "add", "-b", theEffort.BranchName, effortDirectory+theEffort.Name)
+	cmd.Dir = repoDirectory + r.getRepoDirectoryName()
 	return nil
 }
 

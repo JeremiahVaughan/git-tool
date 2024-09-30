@@ -21,6 +21,9 @@ func (m model) View() string {
 			"Add a repo\n%s\n",
 			m.addNewRepoTextInput.View(),
 		)
+		if m.loading {
+			display += m.spinner.View()
+		}
 	case activeViewAddNewEffort:
 		display = fmt.Sprintf(
 			"Add an effort\n\nEffort name\n%s\n\nBranch Name\n%s\n",

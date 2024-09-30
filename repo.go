@@ -9,6 +9,7 @@ import (
 	"regexp"
 	"strings"
 	"sync"
+	"time"
 
 	"github.com/charmbracelet/bubbles/list"
 )
@@ -22,14 +23,17 @@ type repo struct {
 }
 
 func (r repo) Title() string {
+	return strings.TrimSuffix(r.getRepoDirectoryName(), ".git")
+}
+func (r repo) getRepoDirectoryName() string {
 	urlParts := strings.Split(r.Url, "/")
-	repoName := urlParts[len(urlParts)-1]
-	return strings.TrimSuffix(repoName, ".git")
+	return urlParts[len(urlParts)-1]
 }
 func (r repo) Description() string { return r.Url }
 func (r repo) FilterValue() string { return r.Url }
 
 func addRepo(value string) (validationMsg string, err error) {
+	time.Sleep(3 * time.Second) // todo remove
 	if value == "" {
 		return "must provide a value", nil
 	}
@@ -84,19 +88,14 @@ func isRepoValid(url string) bool {
 }
 
 func cloneRepo(url string) error {
-	homeDir, err := os.UserHomeDir()
-	if err != nil {
-		return fmt.Errorf("error, when fetching users home directory. Error: %v", err)
-	}
-	repoDir := homeDir + "/git_tool_data/repos"
-	err = os.MkdirAll(repoDir, 0755)
+	err := os.MkdirAll(repoDirectory, 0755)
 	if err != nil {
 		return fmt.Errorf("error, when creating repos directory. Error: %v", err)
 	}
-	_, err = os.Stat(repoDir + "/" + strings.Split(url, "/")[1])
+	_, err = os.Stat(repoDirectory + "/" + strings.Split(url, "/")[1])
 	if os.IsNotExist(err) {
 		cmd := exec.Command("git", "clone", "--bare", url)
-		cmd.Dir = repoDir
+		cmd.Dir = repoDirectory
 		output, err := cmd.CombinedOutput()
 		if err != nil {
 			return fmt.Errorf("error, when executing clone commmand for %s. Output: %s. Error: %v", url, output, err)

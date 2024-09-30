@@ -8,6 +8,7 @@ import (
 
 	"github.com/charmbracelet/bubbles/key"
 	"github.com/charmbracelet/bubbles/list"
+	"github.com/charmbracelet/bubbles/spinner"
 	"github.com/charmbracelet/bubbles/textinput"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
@@ -15,6 +16,9 @@ import (
 
 //go:embed schema/*
 var databaseFiles embed.FS
+
+var dataDirectory string
+var repoDirectory string
 
 var docStyle = lipgloss.NewStyle().
 	Bold(true).
@@ -32,6 +36,8 @@ type model struct {
 	effortRepoVisibleSelection      []repo
 	selectedEffort                  effort
 	activeView                      viewOption
+	loading                         bool
+	spinner                         spinner.Model
 	// a filter is being created
 	listFilterLive bool
 	// a filter has been applied to the list
@@ -113,7 +119,7 @@ func initModel() (model, error) {
 	repoTextInput.Placeholder = "git@github.com:JeremiahVaughan/git-tool.git"
 	repoTextInput.Focus()
 	repoTextInput.CharLimit = 256
-	repoTextInput.Width = 50
+	repoTextInput.Width = 100
 
 	effortTextInput := textinput.New()
 	effortTextInput.Placeholder = "create UI to display inventory"
@@ -151,7 +157,7 @@ func initModel() (model, error) {
 		}
 	}
 
-	return model{
+	m :=  model{
 		addNewRepoTextInput:             repoTextInput,
 		addNewEffortNameTextInput:       effortTextInput,
 		addNewEffortBranchNameTextInput: effortBranchNameTextInput,
@@ -160,7 +166,9 @@ func initModel() (model, error) {
 		activeView:                      activeViewListEfforts,
 		efforts:                         theEfforts,
 		err:                             nil,
-	}, nil
+	}
+	m.resetSpinner()
+	return m, nil
 }
 
 func main() {
@@ -186,5 +194,13 @@ type (
 )
 
 func (m model) Init() tea.Cmd {
-	return textinput.Blink
+	return tea.Batch(
+		textinput.Blink,
+	)
+}
+
+func (m *model) resetSpinner() {
+	s := spinner.New()
+	s.Spinner = spinner.Globe
+	m.spinner = s
 }

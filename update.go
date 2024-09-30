@@ -5,6 +5,7 @@ import (
 
 	"github.com/charmbracelet/bubbles/key"
 	"github.com/charmbracelet/bubbles/list"
+	"github.com/charmbracelet/bubbles/spinner"
 	tea "github.com/charmbracelet/bubbletea"
 )
 
@@ -16,6 +17,14 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	var cmd tea.Cmd
 
 	switch msg := msg.(type) {
+	case spinner.TickMsg:
+		if m.loading {
+			m.spinner.Tick()
+			m.spinner, cmd = m.spinner.Update(msg)
+			return m, cmd
+		} else {
+			m.resetSpinner()
+		}
 	case tea.KeyMsg:
 		if msg.Type == tea.KeyCtrlC {
 			return m, tea.Quit
@@ -35,6 +44,10 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				}
 				switch msg.Type {
 				case tea.KeyEnter:
+					if len(m.repos.Items()) == 0 {
+						m.activeView = activeViewAddNewRepo
+						return m, cmd
+					}
 					m.selectedEffort = m.efforts.SelectedItem().(effort)
 					theRepoItems, err := fetchSelectedReposForEffort(m.selectedEffort.Id, m.repos)
 					if err != nil {
@@ -64,23 +77,28 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			case tea.KeyEsc:
 				m.activeView = activeViewListRepos
 			case tea.KeyEnter:
-				validationMsg, err := addRepo(m.addNewRepoTextInput.Value())
-				if err != nil || validationMsg != "" {
-					m.err = err
-					m.validationMsg = validationMsg
-					return m, cmd
-				}
-				m.err = nil
-				m.addNewRepoTextInput.Reset()
-				m.validationMsg = ""
-
-				repos, err := fetchRepos()
-				if err != nil {
-					m.err = fmt.Errorf("error, when fetchRepos() for Update(). Error: %v", err)
-					return m, cmd
-				}
-				m.repos.SetItems(repos)
-				m.activeView = activeViewListRepos
+				m.loading = true
+				m.spinner.Tick()
+				m.spinner, cmd = m.spinner.Update(msg)
+				go func() {
+					validationMsg, err := addRepo(m.addNewRepoTextInput.Value())
+					if err != nil || validationMsg != "" {
+						m.err = err
+						m.validationMsg = validationMsg
+					} else {
+						m.err = nil
+						m.addNewRepoTextInput.Reset()
+						m.validationMsg = ""
+						repos, err := fetchRepos()
+						if err != nil {
+							m.err = fmt.Errorf("error, when fetchRepos() for Update(). Error: %v", err)
+							return
+						}
+						m.repos.SetItems(repos)
+						m.activeView = activeViewListRepos
+					}
+					m.loading = false
+				}()
 			}
 		case activeViewAddNewEffort:
 			switch msg.Type {
@@ -95,11 +113,12 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 					m.err = err
 					m.validationMsg = validationMsg
 					return m, cmd
+				} else {
+					m.err = nil
+					m.addNewEffortNameTextInput.Reset()
+					m.addNewEffortBranchNameTextInput.Reset()
+					m.validationMsg = ""
 				}
-				m.err = nil
-				m.addNewEffortNameTextInput.Reset()
-				m.addNewEffortBranchNameTextInput.Reset()
-				m.validationMsg = ""
 
 				efforts, err := fetchEfforts()
 				if err != nil {
@@ -144,7 +163,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				case tea.KeyEsc:
 					m.activeView = activeViewListEfforts
 				case tea.KeyEnter:
-					validationMsg, err := applyRepoSelectionForEffort(m.selectedEffort.Id, m.repos.Items())
+					validationMsg, err := applyRepoSelectionForEffort(m.selectedEffort, m.repos.Items())
 					if err != nil || validationMsg != "" {
 						m.err = err
 						m.validationMsg = validationMsg
