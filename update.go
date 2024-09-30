@@ -17,14 +17,6 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	var cmd tea.Cmd
 
 	switch msg := msg.(type) {
-	case spinner.TickMsg:
-		if m.loading {
-			m.spinner.Tick()
-			m.spinner, cmd = m.spinner.Update(msg)
-			return m, cmd
-		} else {
-			m.resetSpinner()
-		}
 	case tea.KeyMsg:
 		if msg.Type == tea.KeyCtrlC {
 			return m, tea.Quit
@@ -78,8 +70,6 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.activeView = activeViewListRepos
 			case tea.KeyEnter:
 				m.loading = true
-				m.spinner.Tick()
-				m.spinner, cmd = m.spinner.Update(msg)
 				go func() {
 					validationMsg, err := addRepo(m.addNewRepoTextInput.Value())
 					if err != nil || validationMsg != "" {
@@ -97,8 +87,9 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 						m.repos.SetItems(repos)
 						m.activeView = activeViewListRepos
 					}
-					m.loading = false
+					m.loadingFinished <- true
 				}()
+				return m, m.spinner.Tick
 			}
 		case activeViewAddNewEffort:
 			switch msg.Type {
@@ -205,6 +196,15 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 					return m, cmd
 				}
 			}
+		}
+	case spinner.TickMsg:
+		select {
+		case <-m.loadingFinished:
+			m.resetSpinner()
+			m.loading = false
+		default:
+			m.spinner, cmd = m.spinner.Update(msg)
+			return m, cmd
 		}
 	case tea.WindowSizeMsg:
 		h, v := docStyle.GetFrameSize()
