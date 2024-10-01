@@ -9,7 +9,6 @@ import (
 	"regexp"
 	"strings"
 	"sync"
-	"time"
 
 	"github.com/charmbracelet/bubbles/list"
 )
@@ -33,7 +32,6 @@ func (r repo) Description() string { return r.Url }
 func (r repo) FilterValue() string { return r.Url }
 
 func addRepo(value string) (validationMsg string, err error) {
-	time.Sleep(3 * time.Second) // todo remove
 	if value == "" {
 		return "must provide a value", nil
 	}

@@ -10,198 +10,209 @@ import (
 )
 
 func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
-	// reset any errors or validation messages
-	m.err = nil
-	m.validationMsg = ""
 
 	var cmd tea.Cmd
 
 	switch msg := msg.(type) {
 	case tea.KeyMsg:
-		if msg.Type == tea.KeyCtrlC {
-			return m, tea.Quit
-		}
+		// ignore key presses if loading
+		if !m.loading {
+			// reset any errors or validation messages on key press if not loading
+			m.err = nil
+			m.validationMsg = ""
 
-		switch m.activeView {
-		case activeViewListEfforts:
-			if m.repos.FilterState() != list.Filtering {
-				if key.Matches(msg, addItemKeyBinding) {
-					m.activeView = activeViewAddNewEffort
-					return m, cmd
-				} else if key.Matches(msg, deleteItemKeyBinding) {
-					// todo remove git tree and update model with list after item removed
-				} else if key.Matches(msg, navigateToReposBinding) {
-					m.activeView = activeViewListRepos
-					return m, cmd
+			if msg.Type == tea.KeyCtrlC {
+				return m, tea.Quit
+			}
+
+			switch m.activeView {
+			case activeViewListEfforts:
+				if m.repos.FilterState() != list.Filtering {
+					if key.Matches(msg, addItemKeyBinding) {
+						m.activeView = activeViewAddNewEffort
+						return m, cmd
+					} else if key.Matches(msg, deleteItemKeyBinding) {
+						// todo remove git tree and update model with list after item removed
+					} else if key.Matches(msg, navigateToReposBinding) {
+						m.activeView = activeViewListRepos
+						return m, cmd
+					}
+					switch msg.Type {
+					case tea.KeyEnter:
+						if len(m.repos.Items()) == 0 {
+							m.activeView = activeViewAddNewRepo
+							return m, cmd
+						}
+						m.selectedEffort = m.efforts.SelectedItem().(effort)
+						theRepoItems, err := fetchSelectedReposForEffort(m.selectedEffort.Id, m.repos)
+						if err != nil {
+							m.err = fmt.Errorf("error, when fetchSelectedReposForEffort() for Update(). Error: %v", err)
+							return m, cmd
+						}
+
+						m.repos.SetItems(theRepoItems)
+						m.effortRepoVisibleSelection = updateRepoVisibleSelectionList(m.repos.Items())
+						m.activeView = activeViewEditEffort
+					}
 				}
-				switch msg.Type {
-				case tea.KeyEnter:
-					if len(m.repos.Items()) == 0 {
+			case activeViewListRepos:
+				if m.repos.FilterState() != list.Filtering {
+					if key.Matches(msg, addItemKeyBinding) {
 						m.activeView = activeViewAddNewRepo
 						return m, cmd
-					}
-					m.selectedEffort = m.efforts.SelectedItem().(effort)
-					theRepoItems, err := fetchSelectedReposForEffort(m.selectedEffort.Id, m.repos)
-					if err != nil {
-						m.err = fmt.Errorf("error, when fetchSelectedReposForEffort() for Update(). Error: %v", err)
+					} else if key.Matches(msg, deleteItemKeyBinding) {
+						// todo remove git tree and update model with list after item removed
+					} else if key.Matches(msg, navigateToEffortsBinding) {
+						m.activeView = activeViewListEfforts
 						return m, cmd
 					}
-
-					m.repos.SetItems(theRepoItems)
-					m.effortRepoVisibleSelection = updateRepoVisibleSelectionList(m.repos.Items())
-					m.activeView = activeViewEditEffort
 				}
-			}
-		case activeViewListRepos:
-			if m.repos.FilterState() != list.Filtering {
-				if key.Matches(msg, addItemKeyBinding) {
-					m.activeView = activeViewAddNewRepo
-					return m, cmd
-				} else if key.Matches(msg, deleteItemKeyBinding) {
-					// todo remove git tree and update model with list after item removed
-				} else if key.Matches(msg, navigateToEffortsBinding) {
+			case activeViewAddNewRepo:
+				switch msg.Type {
+				case tea.KeyEsc:
+					m.activeView = activeViewListRepos
+				case tea.KeyEnter:
+					if !m.loading {
+						m.loading = true
+						m.addNewRepoTextInput.Blur()
+						go func() {
+							validationMsg, err := addRepo(m.addNewRepoTextInput.Value())
+							if err != nil || validationMsg != "" {
+								m.err = err
+								m.validationMsg = validationMsg
+							} else {
+								m.err = nil
+								m.addNewRepoTextInput.Reset()
+								m.validationMsg = ""
+								repos, err := fetchRepos()
+								if err != nil {
+									m.err = fmt.Errorf("error, when fetchRepos() for Update(). Error: %v", err)
+									return
+								}
+								m.repos.SetItems(repos)
+								m.activeView = activeViewListRepos
+							}
+							m.loadingFinished <- m
+						}()
+						return m, m.spinner.Tick
+					}
+				}
+			case activeViewAddNewEffort:
+				switch msg.Type {
+				case tea.KeyEsc:
 					m.activeView = activeViewListEfforts
-					return m, cmd
-				}
-			}
-		case activeViewAddNewRepo:
-			switch msg.Type {
-			case tea.KeyEsc:
-				m.activeView = activeViewListRepos
-			case tea.KeyEnter:
-				m.loading = true
-				go func() {
-					validationMsg, err := addRepo(m.addNewRepoTextInput.Value())
+				case tea.KeyEnter:
+					validationMsg, err := addEffort(
+						m.addNewEffortNameTextInput.Value(),
+						m.addNewEffortBranchNameTextInput.Value(),
+					)
 					if err != nil || validationMsg != "" {
 						m.err = err
 						m.validationMsg = validationMsg
+						return m, cmd
 					} else {
 						m.err = nil
-						m.addNewRepoTextInput.Reset()
+						m.addNewEffortNameTextInput.Reset()
+						m.addNewEffortBranchNameTextInput.Reset()
 						m.validationMsg = ""
-						repos, err := fetchRepos()
-						if err != nil {
-							m.err = fmt.Errorf("error, when fetchRepos() for Update(). Error: %v", err)
-							return
-						}
-						m.repos.SetItems(repos)
-						m.activeView = activeViewListRepos
 					}
-					m.loadingFinished <- true
-				}()
-				return m, m.spinner.Tick
-			}
-		case activeViewAddNewEffort:
-			switch msg.Type {
-			case tea.KeyEsc:
-				m.activeView = activeViewListEfforts
-			case tea.KeyEnter:
-				validationMsg, err := addEffort(
-					m.addNewEffortNameTextInput.Value(),
-					m.addNewEffortBranchNameTextInput.Value(),
-				)
-				if err != nil || validationMsg != "" {
-					m.err = err
-					m.validationMsg = validationMsg
-					return m, cmd
-				} else {
-					m.err = nil
-					m.addNewEffortNameTextInput.Reset()
-					m.addNewEffortBranchNameTextInput.Reset()
-					m.validationMsg = ""
-				}
 
-				efforts, err := fetchEfforts()
-				if err != nil {
-					m.err = fmt.Errorf("error, when fetchEfforts() for Update(). Error: %v", err)
-					return m, cmd
-				}
-				m.efforts.SetItems(efforts)
-				m.activeView = activeViewListEfforts
-			case tea.KeyTab:
-				if m.addNewEffortNameTextInput.Focused() {
-					m.addNewEffortBranchNameTextInput.Focus()
-					m.addNewEffortNameTextInput.Blur()
-				} else {
-					m.addNewEffortNameTextInput.Focus()
-					m.addNewEffortBranchNameTextInput.Blur()
-				}
-			}
-		case activeViewEditEffort:
-			if m.listFilterLive {
-				switch msg.Type {
-				case tea.KeyEsc:
-					m.listFilterLive = false
-					m.listFilterSet = false
-					m.listFilterTextInput.Reset()
-				case tea.KeyEnter:
-					m.listFilterSet = true
-					m.listFilterLive = false
-					m.listFilterTextInput.Blur()
-				default:
-					m.cursor = 0
-					m.listFilterTextInput, cmd = m.listFilterTextInput.Update(msg)
-					theRepos := updateRepos(
-						m.repos.Items(),
-						m.listFilterTextInput.Value(),
-						m.effortRepoVisibleSelection,
-					)
-					m.repos.SetItems(theRepos)
-					m.effortRepoVisibleSelection = updateRepoVisibleSelectionList(m.repos.Items())
-				}
-			} else {
-				switch msg.Type {
-				case tea.KeyEsc:
-					m.activeView = activeViewListEfforts
-				case tea.KeyEnter:
-					validationMsg, err := applyRepoSelectionForEffort(m.selectedEffort, m.repos.Items())
-					if err != nil || validationMsg != "" {
-						m.err = err
-						m.validationMsg = validationMsg
+					efforts, err := fetchEfforts()
+					if err != nil {
+						m.err = fmt.Errorf("error, when fetchEfforts() for Update(). Error: %v", err)
 						return m, cmd
 					}
-					m.effortRepoVisibleSelection = resetRepoSelection(m.effortRepoVisibleSelection)
+					m.efforts.SetItems(efforts)
 					m.activeView = activeViewListEfforts
-				case tea.KeySpace:
-					m.effortRepoVisibleSelection[m.cursor].Selected = !m.effortRepoVisibleSelection[m.cursor].Selected
-					theRepos := updateRepos(
-						m.repos.Items(),
-						m.listFilterTextInput.Value(),
-						m.effortRepoVisibleSelection,
-					)
-					m.repos.SetItems(theRepos)
-					m.effortRepoVisibleSelection = updateRepoVisibleSelectionList(m.repos.Items())
-
+				case tea.KeyTab:
+					if m.addNewEffortNameTextInput.Focused() {
+						m.addNewEffortBranchNameTextInput.Focus()
+						m.addNewEffortNameTextInput.Blur()
+					} else {
+						m.addNewEffortNameTextInput.Focus()
+						m.addNewEffortBranchNameTextInput.Blur()
+					}
 				}
-				switch msg.String() {
-				case "k":
-					if m.cursor > 0 {
-						m.cursor--
+			case activeViewEditEffort:
+				if m.listFilterLive {
+					switch msg.Type {
+					case tea.KeyEsc:
+						m.listFilterLive = false
+						m.listFilterSet = false
+						m.listFilterTextInput.Reset()
+					case tea.KeyEnter:
+						m.listFilterSet = true
+						m.listFilterLive = false
+						m.listFilterTextInput.Blur()
+					default:
+						m.cursor = 0
+						m.listFilterTextInput, cmd = m.listFilterTextInput.Update(msg)
+						theRepos := updateRepos(
+							m.repos.Items(),
+							m.listFilterTextInput.Value(),
+							m.effortRepoVisibleSelection,
+						)
+						m.repos.SetItems(theRepos)
+						m.effortRepoVisibleSelection = updateRepoVisibleSelectionList(m.repos.Items())
 					}
-				case "j":
-					if m.cursor < len(m.effortRepoVisibleSelection)-1 {
-						m.cursor++
+				} else {
+					switch msg.Type {
+					case tea.KeyEsc:
+						m.activeView = activeViewListEfforts
+					case tea.KeyEnter:
+						validationMsg, err := applyRepoSelectionForEffort(m.selectedEffort, m.repos.Items())
+						if err != nil || validationMsg != "" {
+							m.err = err
+							m.validationMsg = validationMsg
+							return m, cmd
+						}
+						m.effortRepoVisibleSelection = resetRepoSelection(m.effortRepoVisibleSelection)
+						m.activeView = activeViewListEfforts
+					case tea.KeySpace:
+						m.effortRepoVisibleSelection[m.cursor].Selected = !m.effortRepoVisibleSelection[m.cursor].Selected
+						theRepos := updateRepos(
+							m.repos.Items(),
+							m.listFilterTextInput.Value(),
+							m.effortRepoVisibleSelection,
+						)
+						m.repos.SetItems(theRepos)
+						m.effortRepoVisibleSelection = updateRepoVisibleSelectionList(m.repos.Items())
+
 					}
-				case "/":
-					m.listFilterLive = true
-					m.listFilterTextInput.Reset()
-					m.listFilterTextInput.Focus()
-					theRepos := updateRepos(
-						m.repos.Items(),
-						m.listFilterTextInput.Value(),
-						m.effortRepoVisibleSelection,
-					)
-					m.repos.SetItems(theRepos)
-					m.effortRepoVisibleSelection = updateRepoVisibleSelectionList(m.repos.Items())
-					return m, cmd
+					switch msg.String() {
+					case "k":
+						if m.cursor > 0 {
+							m.cursor--
+						}
+					case "j":
+						if m.cursor < len(m.effortRepoVisibleSelection)-1 {
+							m.cursor++
+						}
+					case "/":
+						m.listFilterLive = true
+						m.listFilterTextInput.Reset()
+						m.listFilterTextInput.Focus()
+						theRepos := updateRepos(
+							m.repos.Items(),
+							m.listFilterTextInput.Value(),
+							m.effortRepoVisibleSelection,
+						)
+						m.repos.SetItems(theRepos)
+						m.effortRepoVisibleSelection = updateRepoVisibleSelectionList(m.repos.Items())
+						return m, cmd
+					}
 				}
 			}
 		}
 	case spinner.TickMsg:
 		select {
-		case <-m.loadingFinished:
+		case m = <-m.loadingFinished:
 			m.resetSpinner()
 			m.loading = false
+			switch m.activeView {
+			case activeViewAddNewRepo:
+				m.addNewRepoTextInput.Focus()
+			}
 		default:
 			m.spinner, cmd = m.spinner.Update(msg)
 			return m, cmd

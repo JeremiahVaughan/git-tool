@@ -17,13 +17,18 @@ func (m model) View() string {
 	var display string
 	switch m.activeView {
 	case activeViewAddNewRepo:
+		titlePrefix := "Add a repo"
+		var title string
+		if m.loading {
+			title = fmt.Sprintf("%s\t%s", titlePrefix, m.spinner.View())
+		} else {
+			title = titlePrefix
+		}
 		display = fmt.Sprintf(
-			"Add a repo\n%s\n",
+			"%s\n%s",
+			title,
 			m.addNewRepoTextInput.View(),
 		)
-		if m.loading {
-			display += m.spinner.View()
-		}
 	case activeViewAddNewEffort:
 		display = fmt.Sprintf(
 			"Add an effort\n\nEffort name\n%s\n\nBranch Name\n%s\n",

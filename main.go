@@ -37,7 +37,7 @@ type model struct {
 	selectedEffort                  effort
 	activeView                      viewOption
 	loading                         bool
-	loadingFinished                 chan bool
+	loadingFinished                 chan model
 	spinner                         spinner.Model
 	// a filter is being created
 	listFilterLive bool
@@ -167,7 +167,7 @@ func initModel() (model, error) {
 		activeView:                      activeViewListEfforts,
 		efforts:                         theEfforts,
 		err:                             nil,
-		loadingFinished:                 make(chan bool, 1),
+		loadingFinished:                 make(chan model, 1),
 	}
 	m.resetSpinner()
 	return m, nil
