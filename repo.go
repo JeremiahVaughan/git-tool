@@ -86,14 +86,14 @@ func isRepoValid(url string) bool {
 }
 
 func cloneRepo(url string) error {
-	err := os.MkdirAll(repoDirectory, 0755)
+	err := os.MkdirAll(reposDirectory, 0755)
 	if err != nil {
 		return fmt.Errorf("error, when creating repos directory. Error: %v", err)
 	}
-	_, err = os.Stat(repoDirectory + "/" + strings.Split(url, "/")[1])
+	_, err = os.Stat(reposDirectory + "/" + strings.Split(url, "/")[1])
 	if os.IsNotExist(err) {
 		cmd := exec.Command("git", "clone", "--bare", url)
-		cmd.Dir = repoDirectory
+		cmd.Dir = reposDirectory
 		output, err := cmd.CombinedOutput()
 		if err != nil {
 			return fmt.Errorf("error, when executing clone commmand for %s. Output: %s. Error: %v", url, output, err)

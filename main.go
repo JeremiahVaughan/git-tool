@@ -18,7 +18,8 @@ import (
 var databaseFiles embed.FS
 
 var dataDirectory string
-var repoDirectory string
+var reposDirectory string
+var effortsDirectory string
 
 var docStyle = lipgloss.NewStyle().
 	Bold(true).

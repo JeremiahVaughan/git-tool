@@ -53,8 +53,8 @@ func addEffort(effortName, branchName string) (string, error) {
 			errChan <- fmt.Errorf("error, when fetching users home directory. Error: %v", e)
 			return
 		}
-		repoDir := homeDir + "/git_tool_data/efforts/" + name
-		err = os.MkdirAll(repoDir, 0755)
+		effortDir := homeDir + "/git_tool_data/efforts/" + name
+		err = os.MkdirAll(effortDir, 0755)
 		if err != nil {
 			errChan <- fmt.Errorf("error, when creating effort directory. Error: %v", e)
 			return
@@ -157,22 +157,22 @@ func applyRepoSelectionForEffort(theEffort effort, repos []list.Item) (string, e
 	var wg sync.WaitGroup
 	errChan := make(chan error, 1)
 
-	effortDirectory := dataDirectory + theEffort.Name
-	err := os.MkdirAll(effortDirectory, os.ModePerm)
+	err := os.MkdirAll(effortsDirectory, os.ModePerm)
 	if err != nil {
 		return "", fmt.Errorf("error, when creating effort directory for applyRepoSelectionForEffort(). Error: %v", err)
 	}
 
-	for _, theRepo := range repos {
+	for _, theRepo := range selected {
 		wg.Add(1)
 		go func(r repo) {
 			defer wg.Done()
-			e := createWorktree(effortDirectory, theEffort, r)
+			worktreeDir := fmt.Sprintf("%s%s/%s", effortsDirectory, theEffort.Name, r.Title())
+			e := createWorktree(worktreeDir, theEffort, r)
 			if e != nil {
 				errChan <- fmt.Errorf("error, when createWorktree() for applyRepoSelectionForEffort() of key: %s. Error: %v", r.Title(), e)
 				return
 			}
-		}(theRepo.(repo))
+		}(theRepo)
 	}
 
 	wg.Add(1)
@@ -197,9 +197,13 @@ func applyRepoSelectionForEffort(theEffort effort, repos []list.Item) (string, e
 	return "", nil
 }
 
-func createWorktree(effortDirectory string, theEffort effort, r repo) error {
-	cmd := exec.Command("git", "worktree", "add", "-b", theEffort.BranchName, effortDirectory+theEffort.Name)
-	cmd.Dir = repoDirectory + r.getRepoDirectoryName()
+func createWorktree(worktreeDir string, theEffort effort, r repo) error {
+	cmd := exec.Command("git", "worktree", "add", "-b", theEffort.BranchName, worktreeDir)
+	cmd.Dir = reposDirectory + r.getRepoDirectoryName()
+	output, err := cmd.CombinedOutput()
+	if err != nil {
+		return fmt.Errorf("error, when creating worktree of repo %s for effort %s. Output: %s, Error: %v", r.Title(), theEffort.Name, output, err)
+	}
 	return nil
 }
 

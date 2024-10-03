@@ -15,7 +15,8 @@ func init() {
 			log.Fatalf("error, could not find the home directory. Error: %v", err)
 		}
 		dataDirectory = fmt.Sprintf("%s/git_tool_data/", homeDir)
-		repoDirectory = homeDir + "/git_tool_data/repos/"
+		reposDirectory = dataDirectory + "repos/"
+		effortsDirectory = dataDirectory + "efforts/" 
 		err = os.MkdirAll(dataDirectory, os.ModePerm)
 		if err != nil {
 			log.Fatalf("error, could not create data directory. Error: %v", err)

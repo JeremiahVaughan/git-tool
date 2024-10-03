@@ -10,7 +10,6 @@ import (
 )
 
 func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
-
 	var cmd tea.Cmd
 
 	switch msg := msg.(type) {
@@ -226,7 +225,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, nil
 	}
 
-	// if I don't do this down here the updates don't work properly, seems casting to type is causing this
+	// if I don't do this down here the updates don't work properly, seems casting to type is causing an issue
 	switch m.activeView {
 	case activeViewListRepos:
 		m.repos, cmd = m.repos.Update(msg)
