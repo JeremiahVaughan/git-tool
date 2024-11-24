@@ -198,7 +198,24 @@ func applyRepoSelectionForEffort(theEffort effort, repos []list.Item) (string, e
 }
 
 func createWorktree(worktreeDir string, theEffort effort, r repo) error {
-	cmd := exec.Command("git", "worktree", "add", "-b", theEffort.BranchName, worktreeDir)
+	alreadyExists, err := checkDirectoryExists(worktreeDir)
+	if err != nil {
+		return fmt.Errorf("error, when checkDirectoryExists() for createWorktree(). Error: %v", err)
+	}
+	if alreadyExists {
+		return nil
+	}
+	command := "git"
+	commmandParts := []string{"worktree", "add", worktreeDir}
+	branchAlreadyExists, err := doesBranchExist(theEffort.BranchName)
+	if err != nil {
+		return fmt.Errorf("error, when doesBranchExist() for createWorktree. Error: %v", err)
+	}
+	if branchAlreadyExists {
+		commmandParts = append(commmandParts, "-b")
+	}
+	commmandParts = append(commmandParts, theEffort.BranchName)
+	cmd := exec.Command(command, commmandParts...)
 	cmd.Dir = reposDirectory + r.getRepoDirectoryName()
 	output, err := cmd.CombinedOutput()
 	if err != nil {
@@ -331,4 +348,30 @@ func fetchSelectedReposForEffort(effortId int64, allRepos list.Model) ([]list.It
 	}
 	return result, nil
 
+}
+
+func doesBranchExist(branchName string) (bool, error) {
+	cmd := exec.Command("git", "rev-parse", "--verify", branchName)
+	output, err := cmd.CombinedOutput()
+	if err != nil {
+		outputString := string(output)
+		if strings.Contains(outputString, "Needed a single revision") {
+			return false, nil // Branch does not exist
+		}
+		// If there was another error, return it
+		return false, fmt.Errorf("error, when running command. Output %s. Error: %v", output, err)
+	}
+	// If no error, the branch exists
+	return true, nil
+}
+
+func checkDirectoryExists(path string) (bool, error) {
+	info, err := os.Stat(path)
+	if os.IsNotExist(err) {
+		return false, nil
+	}
+	if err != nil {
+		return false, fmt.Errorf("error, when checking if directory exists for checkDirectoryExists(). Error: %v", err)
+	}
+	return info.IsDir(), nil
 }
