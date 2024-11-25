@@ -7,16 +7,15 @@ import (
 	"os"
 )
 
-
 func init() {
-	if os.Getenv("TEST_MODE") == "false" {
+	if os.Getenv("TEST_MODE") != "true" {
 		homeDir, err := os.UserHomeDir()
 		if err != nil {
 			log.Fatalf("error, could not find the home directory. Error: %v", err)
 		}
 		dataDirectory = fmt.Sprintf("%s/git_tool_data/", homeDir)
 		reposDirectory = dataDirectory + "repos/"
-		effortsDirectory = dataDirectory + "efforts/" 
+		effortsDirectory = dataDirectory + "efforts/"
 		err = os.MkdirAll(dataDirectory, os.ModePerm)
 		if err != nil {
 			log.Fatalf("error, could not create data directory. Error: %v", err)
