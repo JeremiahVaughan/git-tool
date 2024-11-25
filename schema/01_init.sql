@@ -17,3 +17,4 @@ CREATE TABLE IF NOT EXISTS effort_repo (
 	FOREIGN KEY (repo_id) REFERENCES repo(id) ON DELETE CASCADE
 );
 
+CREATE INDEX idx_effort_id ON effort_repo (effort_id);                  

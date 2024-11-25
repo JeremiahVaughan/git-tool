@@ -48,14 +48,13 @@ func addEffort(effortName, branchName string) (string, error) {
 	go func() {
 		defer wg.Done()
 		var e error
-		homeDir, err := os.UserHomeDir()
-		if err != nil {
-			errChan <- fmt.Errorf("error, when fetching users home directory. Error: %v", e)
+		effortDir, e := getEffortDir(name)
+		if e != nil {
+			errChan <- fmt.Errorf("error, when getting effort directory. Error: %v", e)
 			return
 		}
-		effortDir := homeDir + "/git_tool_data/efforts/" + name
-		err = os.MkdirAll(effortDir, 0755)
-		if err != nil {
+		e = os.MkdirAll(effortDir, 0755)
+		if e != nil {
 			errChan <- fmt.Errorf("error, when creating effort directory. Error: %v", e)
 			return
 		}
@@ -144,10 +143,13 @@ func fetchEfforts() ([]list.Item, error) {
 
 func applyRepoSelectionForEffort(theEffort effort, repos []list.Item) (string, error) {
 	var selected []repo
+	var notSelected []repo
 	for _, r := range repos {
 		theRepo := r.(repo)
 		if theRepo.Selected {
 			selected = append(selected, theRepo)
+		} else {
+			notSelected = append(notSelected, theRepo)
 		}
 	}
 	if len(selected) == 0 {
@@ -166,8 +168,7 @@ func applyRepoSelectionForEffort(theEffort effort, repos []list.Item) (string, e
 		wg.Add(1)
 		go func(r repo) {
 			defer wg.Done()
-			worktreeDir := fmt.Sprintf("%s%s/%s", effortsDirectory, theEffort.Name, r.Title())
-			e := createWorktree(worktreeDir, theEffort, r)
+			e := createWorktree(theEffort, r)
 			if e != nil {
 				errChan <- fmt.Errorf("error, when createWorktree() for applyRepoSelectionForEffort() of key: %s. Error: %v", r.Title(), e)
 				return
@@ -175,16 +176,17 @@ func applyRepoSelectionForEffort(theEffort effort, repos []list.Item) (string, e
 		}(theRepo)
 	}
 
-	wg.Add(1)
-	go func() {
-		defer wg.Done()
-		var e error
-		e = persistRepoSelection(theEffort.Id, selected)
-		if e != nil {
-			errChan <- fmt.Errorf("error, when persistRepoSelection() for applyRepoSelectionForEffort(). Error: %v", e)
-			return
-		}
-	}()
+	for _, theRepo := range notSelected {
+		wg.Add(1)
+		go func(r repo) {
+			defer wg.Done()
+			e := deleteWorktree(theEffort, r)
+			if e != nil {
+				errChan <- fmt.Errorf("error, when deleteWorktree() for applyRepoSelectionForEffort() of key: %s. Error: %v", r.Title(), e)
+				return
+			}
+		}(theRepo)
+	}
 
 	go func() {
 		wg.Wait()
@@ -194,32 +196,316 @@ func applyRepoSelectionForEffort(theEffort effort, repos []list.Item) (string, e
 	if errChanError := <-errChan; errChanError != nil {
 		return "", fmt.Errorf("error, when attempting perform async actions. Error: %v", errChanError)
 	}
+
+	err = persistRepoSelection(theEffort.Id, selected)
+	if err != nil {
+		return "", fmt.Errorf("error, when persistRepoSelection() for applyRepoSelectionForEffort(). Error: %v", err)
+	}
 	return "", nil
 }
 
-func createWorktree(worktreeDir string, theEffort effort, r repo) error {
+func createWorktree(theEffort effort, r repo) error {
+	worktreeDir := getWorktreeDir(theEffort, r)
 	alreadyExists, err := checkDirectoryExists(worktreeDir)
 	if err != nil {
 		return fmt.Errorf("error, when checkDirectoryExists() for createWorktree(). Error: %v", err)
 	}
-	if alreadyExists {
-		return nil
+	if !alreadyExists {
+		command := "git"
+		commandDir := reposDirectory + r.getRepoDirectoryName()
+		commmandParts := []string{"worktree", "add", worktreeDir}
+		branchAlreadyExists, err := doesBranchExist(theEffort.BranchName, commandDir)
+		if err != nil {
+			return fmt.Errorf("error, when doesBranchExist() for createWorktree(). Error: %v", err)
+		}
+		if !branchAlreadyExists {
+			commmandParts = append(commmandParts, "-b")
+		}
+		commmandParts = append(commmandParts, theEffort.BranchName)
+		cmd := exec.Command(command, commmandParts...)
+		cmd.Dir = commandDir
+		output, err := cmd.CombinedOutput()
+		if err != nil {
+			commandString := command + " " + strings.Join(commmandParts, " ")
+			return fmt.Errorf("error, when creating worktree with command: %s at directory: %s. Output: %s, Error: %v", commandString, cmd.Dir, output, err)
+		}
 	}
-	command := "git"
-	commmandParts := []string{"worktree", "add", worktreeDir}
-	branchAlreadyExists, err := doesBranchExist(theEffort.BranchName)
+	err = ensureRemoteBranchesExists(worktreeDir, theEffort.BranchName)
 	if err != nil {
-		return fmt.Errorf("error, when doesBranchExist() for createWorktree. Error: %v", err)
+		return fmt.Errorf("error, when ensureRemoteBranchExists() for createWorktree(). Error: %v", err)
 	}
-	if branchAlreadyExists {
-		commmandParts = append(commmandParts, "-b")
-	}
-	commmandParts = append(commmandParts, theEffort.BranchName)
-	cmd := exec.Command(command, commmandParts...)
-	cmd.Dir = reposDirectory + r.getRepoDirectoryName()
+	return nil
+}
+
+func ensureRemoteBranchesExists(worktreeDir string, branchName string) (err error) {
+	commandDir := worktreeDir
+	command := "git"
+
+	defer func() {
+		commandParts := []string{"switch", branchName}
+		cmd := exec.Command(command, commandParts...)
+		cmd.Dir = commandDir
+		output, cleanupErr := cmd.CombinedOutput()
+		if cleanupErr != nil {
+			commandString := command + " " + strings.Join(commandParts, " ")
+			err = fmt.Errorf(
+				"error, when executing command for ensureRemoteBranchExists(). Command: %s at directory: %s. Output: %s, Error: %v, Cleanup Error: %v",
+				commandString,
+				commandDir,
+				output,
+				err,
+				cleanupErr,
+			)
+		}
+	}()
+
+	commandParts := []string{"push", "-u", "origin", branchName}
+	cmd := exec.Command(command, commandParts...)
+	cmd.Dir = commandDir
 	output, err := cmd.CombinedOutput()
 	if err != nil {
-		return fmt.Errorf("error, when creating worktree of repo %s for effort %s. Output: %s, Error: %v", r.Title(), theEffort.Name, output, err)
+		commandString := command + " " + strings.Join(commandParts, " ")
+		return fmt.Errorf(
+			"error, when executing command for ensureRemoteBranchExists(). Command: %s at directory: %s. Output: %s, Error: %v",
+			commandString,
+			commandDir,
+			output,
+			err,
+		)
+	}
+
+	commandParts = []string{"switch", "master"}
+	cmd = exec.Command(command, commandParts...)
+	cmd.Dir = commandDir
+	output, err = cmd.CombinedOutput()
+	if err != nil {
+		commandString := command + " " + strings.Join(commandParts, " ")
+		return fmt.Errorf(
+			"error, when executing command for ensureRemoteBranchExists(). Command: %s at directory: %s. Output: %s, Error: %v",
+			commandString,
+			commandDir,
+			output,
+			err,
+		)
+	}
+
+	commandParts = []string{"pull", "origin", "master"}
+	cmd = exec.Command(command, commandParts...)
+	cmd.Dir = commandDir
+	output, err = cmd.CombinedOutput()
+	if err != nil {
+		commandString := command + " " + strings.Join(commandParts, " ")
+		return fmt.Errorf(
+			"error, when executing command for ensureRemoteBranchExists(). Command: %s at directory: %s. Output: %s, Error: %v",
+			commandString,
+			commandDir,
+			output,
+			err,
+		)
+	}
+
+	commandParts = []string{"push", "-u", "origin", "master"}
+	cmd = exec.Command(command, commandParts...)
+	cmd.Dir = commandDir
+	output, err = cmd.CombinedOutput()
+	if err != nil {
+		commandString := command + " " + strings.Join(commandParts, " ")
+		return fmt.Errorf(
+			"error, when executing command for ensureRemoteBranchExists(). Command: %s at directory: %s. Output: %s, Error: %v",
+			commandString,
+			commandDir,
+			output,
+			err,
+		)
+	}
+	return nil
+}
+
+func verifySafeDeletionOfRemoteBranch(worktreeDir string, theEffort effort, r repo) (err error) {
+	commandDir := worktreeDir
+	command := "git"
+
+	defer func() {
+		commandParts := []string{"switch", theEffort.BranchName}
+		cmd := exec.Command(command, commandParts...)
+		cmd.Dir = commandDir
+		output, cleanupErr := cmd.CombinedOutput()
+		if cleanupErr != nil {
+			commandString := command + " " + strings.Join(commandParts, " ")
+			err = fmt.Errorf(
+				"error, when verifying if its safe to delete worktree with command: %s at directory: %s. Output: %s, Error: %v, Cleanup Error: %v",
+				commandString,
+				commandDir,
+				output,
+				err,
+				cleanupErr,
+			)
+		}
+	}()
+
+	commandParts := []string{"status"}
+	cmd := exec.Command(command, commandParts...)
+	cmd.Dir = commandDir
+	output, err := cmd.CombinedOutput()
+	if err != nil {
+		commandString := command + " " + strings.Join(commandParts, " ")
+		return fmt.Errorf("error, when verifying if its safe to delete worktree with command: %s at directory: %s. Output: %s, Error: %v", commandString, commandDir, output, err)
+	}
+	if !strings.Contains(string(output), "working tree clean") {
+		return fmt.Errorf("unsafe delete operation, please stash or commit your changes. Effort: %s. Repo: %s", theEffort.Name, r.Title())
+	}
+
+	// pulling and pushing any existing changes on both the working branch and master to get local in sync with remote
+	// pulling first since remote should always be the source of truth
+	commandParts = []string{"pull"}
+	cmd = exec.Command(command, commandParts...)
+	cmd.Dir = commandDir
+	output, err = cmd.CombinedOutput()
+	if err != nil {
+		commandString := command + " " + strings.Join(commandParts, " ")
+		return fmt.Errorf("error, when verifying if its safe to delete worktree with command: %s at directory: %s. Output: %s, Error: %v", commandString, commandDir, output, err)
+	}
+	commandParts = []string{"push"}
+	cmd = exec.Command(command, commandParts...)
+	cmd.Dir = commandDir
+	output, err = cmd.CombinedOutput()
+	if err != nil {
+		commandString := command + " " + strings.Join(commandParts, " ")
+		return fmt.Errorf("error, when verifying if its safe to delete worktree with command: %s at directory: %s. Output: %s, Error: %v", commandString, commandDir, output, err)
+	}
+	commandParts = []string{"switch", "master"}
+	cmd = exec.Command(command, commandParts...)
+	cmd.Dir = commandDir
+	output, err = cmd.CombinedOutput()
+	if err != nil {
+		commandString := command + " " + strings.Join(commandParts, " ")
+		return fmt.Errorf("error, when verifying if its safe to delete worktree with command: %s at directory: %s. Output: %s, Error: %v", commandString, commandDir, output, err)
+	}
+	commandParts = []string{"pull"}
+	cmd = exec.Command(command, commandParts...)
+	cmd.Dir = commandDir
+	output, err = cmd.CombinedOutput()
+	if err != nil {
+		commandString := command + " " + strings.Join(commandParts, " ")
+		return fmt.Errorf("error, when verifying if its safe to delete worktree with command: %s at directory: %s. Output: %s, Error: %v", commandString, commandDir, output, err)
+	}
+	commandParts = []string{"push"}
+	cmd = exec.Command(command, commandParts...)
+	cmd.Dir = commandDir
+	output, err = cmd.CombinedOutput()
+	if err != nil {
+		commandString := command + " " + strings.Join(commandParts, " ")
+		return fmt.Errorf("error, when verifying if its safe to delete worktree with command: %s at directory: %s. Output: %s, Error: %v", commandString, commandDir, output, err)
+	}
+
+	commandParts = []string{"branch", "--no-merged"}
+	cmd = exec.Command(command, commandParts...)
+	cmd.Dir = commandDir
+	output, err = cmd.CombinedOutput()
+	if err != nil {
+		commandString := command + " " + strings.Join(commandParts, " ")
+		return fmt.Errorf("error, when verifying if its safe to delete worktree with command: %s at directory: %s. Output: %s, Error: %v", commandString, commandDir, output, err)
+	}
+	if strings.Contains(string(output), theEffort.BranchName) {
+		err = fmt.Errorf(
+			"cannot delete the remote branch until it has been merged into master for effort: %s. repo: %s. Branch: %s",
+			theEffort.Name,
+			r.Title(),
+			theEffort.BranchName,
+		)
+	}
+
+	return err
+}
+
+func deleteWorktree(theEffort effort, r repo) error {
+	worktreeDir := getWorktreeDir(theEffort, r)
+	command := "git"
+	commandDir := reposDirectory + r.getRepoDirectoryName()
+	exists, err := checkDirectoryExists(worktreeDir)
+	if err != nil {
+		return fmt.Errorf("error, when checkDirectoryExists() for deteletWorktree(). Error: %v", err)
+	}
+	if exists {
+		// we delete the branches first because we need the worktree directory to perform validation
+		branchExists, err := doesBranchExist(theEffort.BranchName, commandDir)
+		if err != nil {
+			return fmt.Errorf("error, when doesBranchExist() for deteletWorktree. Error: %v", err)
+		}
+		if branchExists {
+			err := ensureWorktreeIsOnCorrectBranch(worktreeDir, theEffort.BranchName)
+			if err != nil {
+				return fmt.Errorf("error, when ensureWorktreeIsOnCorrectBranch() for deteletWorktree(). Error: %v", err)
+			}
+
+			remoteBranchExists, err := doesRemoteBranchExist(theEffort.BranchName, commandDir)
+			if err != nil {
+				return fmt.Errorf("error, when doesBranchExist() for deteletWorktree. Error: %v", err)
+			}
+			if remoteBranchExists {
+				err = verifySafeDeletionOfRemoteBranch(worktreeDir, theEffort, r)
+				if err != nil {
+					return fmt.Errorf("error, when verifySafeDeleteOfRemoteBranch() for deleteWorktree(). Error: %v", err)
+				}
+				deleteBranchRemoteCmdParts := []string{"push", "origin", "--delete", theEffort.BranchName}
+				deleteBranchRemoteCmd := exec.Command(command, deleteBranchRemoteCmdParts...)
+				deleteBranchRemoteCmd.Dir = commandDir
+				output, err := deleteBranchRemoteCmd.CombinedOutput()
+				if err != nil {
+					commandString := command + " " + strings.Join(deleteBranchRemoteCmdParts, " ")
+					return fmt.Errorf("error, when deleting remote branch: %s at directory: %s. Output: %s, Error: %v", commandString, commandDir, output, err)
+				}
+			}
+
+			// cannot delete a branch while we are on that branch, so switching to master
+			commandParts := []string{"switch", "master"}
+			cmd := exec.Command(command, commandParts...)
+			cmd.Dir = worktreeDir
+			output, err := cmd.CombinedOutput()
+			if err != nil {
+				commandString := command + " " + strings.Join(commandParts, " ")
+				return fmt.Errorf(
+					"error, when verifying if its safe to delete worktree with command: %s at directory: %s. Output: %s, Error: %v",
+					commandString,
+					commandDir,
+					output,
+					err,
+				)
+			}
+
+			deleteBranchCmdParts := []string{"branch", "-d", theEffort.BranchName}
+			deleteBranchCmd := exec.Command(command, deleteBranchCmdParts...)
+			deleteBranchCmd.Dir = commandDir
+			output, err = deleteBranchCmd.CombinedOutput()
+			if err != nil {
+				commandString := command + " " + strings.Join(deleteBranchCmdParts, " ")
+				return fmt.Errorf("error, when deleting worktree with command: %s at directory: %s. Output: %s, Error: %v", commandString, commandDir, output, err)
+			}
+		}
+
+		commmandParts := []string{"worktree", "remove", worktreeDir}
+		cmd := exec.Command(command, commmandParts...)
+		cmd.Dir = commandDir
+		output, err := cmd.CombinedOutput()
+		if err != nil {
+			commandString := command + " " + strings.Join(commmandParts, " ")
+			return fmt.Errorf("error, when deleting worktree with command: %s at directory: %s. Output: %s, Error: %v", commandString, commandDir, output, err)
+		}
+	}
+
+	return nil
+}
+
+func ensureWorktreeIsOnCorrectBranch(worktreeDir string, branchName string) error {
+	command := "git"
+	commandDir := worktreeDir
+	commmandParts := []string{"switch", branchName}
+	cmd := exec.Command(command, commmandParts...)
+	cmd.Dir = commandDir
+	output, err := cmd.CombinedOutput()
+	if err != nil {
+		commandString := command + " " + strings.Join(commmandParts, " ")
+		return fmt.Errorf("error, when ensuring worktree is on the correct branch with command: %s at directory: %s. Output: %s, Error: %v", commandString, commandDir, output, err)
 	}
 	return nil
 }
@@ -293,7 +579,7 @@ func deleteAnyNoLongerSelected(effortId int64, repos []repo) error {
 	return nil
 }
 
-func fetchSelectedReposForEffort(effortId int64, allRepos list.Model) ([]list.Item, error) {
+func fetchSelectedReposForEffort(effortId int64) (map[int64]bool, error) {
 	rows, err := database.Query(
 		`SELECT repo_id
 		FROM effort_repo
@@ -333,7 +619,14 @@ func fetchSelectedReposForEffort(effortId int64, allRepos list.Model) ([]list.It
 	if err != nil {
 		return nil, fmt.Errorf("error, when iterating through database rows. Error: %v", err)
 	}
+	return selectedReposMap, nil
+}
 
+func fetchEffortRepoChoices(effortId int64, allRepos list.Model) ([]list.Item, error) {
+	selectedReposMap, err := fetchSelectedReposForEffort(effortId)
+	if err != nil {
+		return nil, fmt.Errorf("error, when fetchSelectedReposForEffort() for fetchEffortRepoChoices(). Error: %v", err)
+	}
 	result := make([]list.Item, len(allRepos.Items()))
 	for i, r := range allRepos.Items() {
 		theRepo := r.(repo)
@@ -350,8 +643,9 @@ func fetchSelectedReposForEffort(effortId int64, allRepos list.Model) ([]list.It
 
 }
 
-func doesBranchExist(branchName string) (bool, error) {
+func doesBranchExist(branchName string, commandDir string) (bool, error) {
 	cmd := exec.Command("git", "rev-parse", "--verify", branchName)
+	cmd.Dir = commandDir
 	output, err := cmd.CombinedOutput()
 	if err != nil {
 		outputString := string(output)
@@ -360,6 +654,22 @@ func doesBranchExist(branchName string) (bool, error) {
 		}
 		// If there was another error, return it
 		return false, fmt.Errorf("error, when running command. Output %s. Error: %v", output, err)
+	}
+	// If no error, the branch exists
+	return true, nil
+}
+
+func doesRemoteBranchExist(branchName string, commandDir string) (bool, error) {
+	cmd := exec.Command("git", "ls-remote", "--heads", "origin", branchName)
+	cmd.Dir = commandDir
+	output, err := cmd.CombinedOutput()
+	if err != nil {
+		// If there was another error, return it
+		return false, fmt.Errorf("error, when running command. Output %s. Error: %v", output, err)
+	}
+	outputString := string(output)
+	if !strings.Contains(outputString, branchName) {
+		return false, nil // remote branch does not exist
 	}
 	// If no error, the branch exists
 	return true, nil
@@ -374,4 +684,110 @@ func checkDirectoryExists(path string) (bool, error) {
 		return false, fmt.Errorf("error, when checking if directory exists for checkDirectoryExists(). Error: %v", err)
 	}
 	return info.IsDir(), nil
+}
+
+func deleteEffort(theEffort effort) error {
+	repoIds, err := fetchSelectedReposForEffort(theEffort.Id)
+	if err != nil {
+		return fmt.Errorf("error, when fetchSelectedReposForEffort() for deleteEffort(). Error: %v", err)
+	}
+	effortRepos, err := fetchReposForIds(repoIds)
+	if err != nil {
+		return fmt.Errorf("error, when fetchReposForIds() for deleteEffort(). Error: %v", err)
+	}
+	if len(effortRepos) != 0 {
+		for _, r := range effortRepos {
+			err = deleteWorktree(theEffort, r)
+			if err != nil {
+				return fmt.Errorf("error, when deleteWorktree() for deleteEffort(). Error: %v", err)
+			}
+		}
+		theStatement := `DELETE FROM effort_repo
+                    WHERE effort_id = ?`
+		_, err = database.Exec(theStatement, theEffort.Id)
+		if err != nil {
+			return fmt.Errorf("error, when deleting from effort_repo table for deleteEffort(). Error: %v", err)
+		}
+	}
+	effortDir, err := getEffortDir(theEffort.Name)
+	if err != nil {
+		return fmt.Errorf("error, when getEffortDir() for deleteEffort(). Error: %v", err)
+	}
+	err = os.Remove(effortDir)
+	if err != nil && !os.IsNotExist(err) {
+		return fmt.Errorf("error, when os.Remove() for deleteEffort(). Error: %v", err)
+	}
+	theStatement := `DELETE FROM effort
+                    WHERE id = ?`
+	_, err = database.Exec(theStatement, theEffort.Id)
+	if err != nil {
+		return fmt.Errorf("error, when deleting from effort table for deleteEffort(). Error: %v", err)
+	}
+	return nil
+}
+
+func getWorktreeDir(theEffort effort, r repo) string {
+	return fmt.Sprintf("%s%s/%s", effortsDirectory, theEffort.Name, r.Title())
+}
+
+func fetchReposForIds(repoIds map[int64]bool) ([]repo, error) {
+	placeholders := make([]string, len(repoIds))
+	args := make([]any, len(repoIds))
+	for i := range placeholders {
+		placeholders[i] = "?"
+	}
+	i := 0
+	for k, _ := range repoIds {
+		args[i] = k
+		i++
+	}
+	theStatement := `SELECT url
+                    FROM repo
+                    WHERE id IN (%s)`
+	theStatement = fmt.Sprintf(theStatement, strings.Join(placeholders, ","))
+
+	rows, err := database.Query(
+		theStatement,
+		args...,
+	)
+	defer func(rows *sql.Rows) {
+		if rows != nil {
+			closeRowsError := rows.Close()
+			if closeRowsError != nil {
+				// no choice but to log the error since defer doesn't let us return errors
+				// defer is needed though because it ensures a cleanup attempt is made even if we should return early due to an error
+				log.Printf("error, when attempting to close database rows: %v", closeRowsError)
+			}
+		}
+	}(rows)
+
+	if err != nil {
+		return nil, fmt.Errorf("error, when attempting to retrieve records. Error: %v", err)
+	}
+
+	var result []repo
+	for rows.Next() {
+		var r repo
+		err = rows.Scan(
+			&r.Url,
+		)
+		if err != nil {
+			return nil, fmt.Errorf("error, when scanning database rows. Error: %v", err)
+		}
+		result = append(result, r)
+	}
+
+	err = rows.Err()
+	if err != nil {
+		return nil, fmt.Errorf("error, when iterating through database rows. Error: %v", err)
+	}
+	return result, nil
+}
+
+func getEffortDir(name string) (string, error) {
+	homeDir, err := os.UserHomeDir()
+	if err != nil {
+		return "", fmt.Errorf("error, when fetching users home directory. Error: %v", err)
+	}
+	return homeDir + "/git_tool_data/efforts/" + name, nil
 }

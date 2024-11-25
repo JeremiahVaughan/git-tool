@@ -31,6 +31,7 @@ type model struct {
 	addNewRepoTextInput             textinput.Model
 	addNewEffortNameTextInput       textinput.Model
 	addNewEffortBranchNameTextInput textinput.Model
+	deleteEffortTextInput           textinput.Model
 	listFilterTextInput             textinput.Model
 	repos                           list.Model
 	efforts                         list.Model
@@ -38,7 +39,6 @@ type model struct {
 	selectedEffort                  effort
 	activeView                      viewOption
 	loading                         bool
-	loadingFinished                 chan model
 	spinner                         spinner.Model
 	// a filter is being created
 	listFilterLive bool
@@ -49,6 +49,15 @@ type model struct {
 	validationMsg string
 }
 
+// modelData can't use the model itself because apparently channels have a size limit of 64kb
+type modelData struct {
+    resetControls bool
+    err error
+    validationMsg string
+    activeView viewOption
+    repos list.Model
+}
+
 type viewOption string
 
 const (
@@ -56,8 +65,11 @@ const (
 	activeViewListRepos    viewOption = "lr"
 	activeViewListEfforts  viewOption = "le"
 	activeViewAddNewEffort viewOption = "ane"
+	activeViewDeleteEffort viewOption = "de"
 	activeViewEditEffort   viewOption = "ee"
 )
+
+var loadingFinished = make(chan modelData, 1)
 
 var deleteItemKeyBinding = key.NewBinding(
 	key.WithKeys("d"),
@@ -120,24 +132,29 @@ func initModel() (model, error) {
 	repoTextInput := textinput.New()
 	repoTextInput.Placeholder = "git@github.com:JeremiahVaughan/git-tool.git"
 	repoTextInput.Focus()
-	repoTextInput.CharLimit = 256
+	repoTextInput.CharLimit = 100
 	repoTextInput.Width = 100
 
 	effortTextInput := textinput.New()
 	effortTextInput.Placeholder = "create UI to display inventory"
-	effortTextInput.CharLimit = 256
+	effortTextInput.CharLimit = 50
 	effortTextInput.Width = 50
 	effortTextInput.Focus()
 
 	effortBranchNameTextInput := textinput.New()
 	effortBranchNameTextInput.Placeholder = "Ticket ID"
 	effortBranchNameTextInput.CharLimit = 32
-	effortBranchNameTextInput.Width = 50
+	effortBranchNameTextInput.Width = 32
+
+	deleteEffortTextInput := textinput.New()
+	deleteEffortTextInput.Placeholder = "Type effort name to delete"
+	deleteEffortTextInput.CharLimit = 32
+	deleteEffortTextInput.Width = 32
 
 	listFilter := textinput.New()
 	listFilter.Placeholder = "no active filter"
-	listFilter.CharLimit = 50
-	listFilter.Width = 50
+	listFilter.CharLimit = 15
+	listFilter.Width = 15
 
 	theRepos := list.New(repos, list.NewDefaultDelegate(), 0, 0) // will set width and height later
 	theRepos.Title = "Repos"
@@ -163,12 +180,12 @@ func initModel() (model, error) {
 		addNewRepoTextInput:             repoTextInput,
 		addNewEffortNameTextInput:       effortTextInput,
 		addNewEffortBranchNameTextInput: effortBranchNameTextInput,
+		deleteEffortTextInput:           deleteEffortTextInput,
 		listFilterTextInput:             listFilter,
 		repos:                           theRepos,
 		activeView:                      activeViewListEfforts,
 		efforts:                         theEfforts,
 		err:                             nil,
-		loadingFinished:                 make(chan model, 1),
 	}
 	m.resetSpinner()
 	return m, nil

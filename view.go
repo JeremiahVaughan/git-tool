@@ -16,6 +16,19 @@ func (m model) View() string {
 
 	var display string
 	switch m.activeView {
+	case activeViewDeleteEffort:
+		titlePrefix := fmt.Sprintf("Delete effort \"%s\"", m.selectedEffort.Name)
+		var title string
+		if m.loading {
+			title = fmt.Sprintf("%s\t%s", titlePrefix, m.spinner.View())
+		} else {
+			title = titlePrefix
+		}
+		display = fmt.Sprintf(
+			"%s\n%s",
+			title,
+			m.deleteEffortTextInput.View(),
+		)
 	case activeViewAddNewRepo:
 		titlePrefix := "Add a repo"
 		var title string
@@ -55,7 +68,13 @@ func (m model) View() string {
 			}
 			availableRepos = append(availableRepos, itemDisplay)
 		}
-		title := fmt.Sprintf("Add repos to \"%s\"", m.selectedEffort.Desc)
+		titlePrefix := fmt.Sprintf("Add repos to \"%s\"", m.selectedEffort.Desc)
+		var title string
+		if m.loading {
+			title = fmt.Sprintf("%s\t%s", titlePrefix, m.spinner.View())
+		} else {
+			title = titlePrefix
+		}
 		title = lipgloss.NewStyle().
 			Background(lipgloss.Color("#7d34eb")).
 			Foreground(lipgloss.Color("#DDDDDD")).

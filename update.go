@@ -2,7 +2,6 @@ package main
 
 import (
 	"fmt"
-
 	"github.com/charmbracelet/bubbles/key"
 	"github.com/charmbracelet/bubbles/list"
 	"github.com/charmbracelet/bubbles/spinner"
@@ -25,13 +24,44 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 
 			switch m.activeView {
+			case activeViewDeleteEffort:
+				switch msg.Type {
+				case tea.KeyEnter:
+					if !m.loading {
+						required := m.efforts.SelectedItem().(effort).Name
+						if m.deleteEffortTextInput.Value() != required {
+							m.validationMsg = fmt.Sprintf("Input must match \"%s\"", required)
+						} else {
+							theEffort := m.efforts.SelectedItem().(effort)
+							m.loading = true
+							m.addNewRepoTextInput.Blur()
+							go func() {
+								var md modelData
+								err := deleteEffort(theEffort)
+								if err != nil {
+									md.err = err
+								} else {
+									md.err = nil
+									md.resetControls = true
+									md.activeView = activeViewListEfforts
+								}
+								loadingFinished <- md
+							}()
+						}
+						return m, m.spinner.Tick
+					}
+
+				}
 			case activeViewListEfforts:
 				if m.repos.FilterState() != list.Filtering {
 					if key.Matches(msg, addItemKeyBinding) {
 						m.activeView = activeViewAddNewEffort
 						return m, cmd
 					} else if key.Matches(msg, deleteItemKeyBinding) {
-						// todo remove git tree and update model with list after item removed
+						m.activeView = activeViewDeleteEffort
+						m.selectedEffort = m.efforts.SelectedItem().(effort)
+						m.deleteEffortTextInput.Focus()
+						return m, cmd
 					} else if key.Matches(msg, navigateToReposBinding) {
 						m.activeView = activeViewListRepos
 						return m, cmd
@@ -43,7 +73,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 							return m, cmd
 						}
 						m.selectedEffort = m.efforts.SelectedItem().(effort)
-						theRepoItems, err := fetchSelectedReposForEffort(m.selectedEffort.Id, m.repos)
+						theRepoItems, err := fetchEffortRepoChoices(m.selectedEffort.Id, m.repos)
 						if err != nil {
 							m.err = fmt.Errorf("error, when fetchSelectedReposForEffort() for Update(). Error: %v", err)
 							return m, cmd
@@ -60,7 +90,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 						m.activeView = activeViewAddNewRepo
 						return m, cmd
 					} else if key.Matches(msg, deleteItemKeyBinding) {
-						// todo remove git tree and update model with list after item removed
+						// todo remove repo and update model with list after item removed
 					} else if key.Matches(msg, navigateToEffortsBinding) {
 						m.activeView = activeViewListEfforts
 						return m, cmd
@@ -75,23 +105,25 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 						m.loading = true
 						m.addNewRepoTextInput.Blur()
 						go func() {
+							var md modelData
 							validationMsg, err := addRepo(m.addNewRepoTextInput.Value())
 							if err != nil || validationMsg != "" {
-								m.err = err
-								m.validationMsg = validationMsg
+								md.err = err
+								md.validationMsg = validationMsg
 							} else {
-								m.err = nil
-								m.addNewRepoTextInput.Reset()
-								m.validationMsg = ""
+								md.err = nil
+								md.validationMsg = ""
+								md.resetControls = true
 								repos, err := fetchRepos()
 								if err != nil {
-									m.err = fmt.Errorf("error, when fetchRepos() for Update(). Error: %v", err)
-									return
+									md.err = fmt.Errorf("error, when fetchRepos() for Update(). Error: %v", err)
+								} else {
+									m.repos.SetItems(repos)
+									md.repos = m.repos
+									md.activeView = activeViewListRepos
 								}
-								m.repos.SetItems(repos)
-								m.activeView = activeViewListRepos
 							}
-							m.loadingFinished <- m
+							loadingFinished <- md
 						}()
 						return m, m.spinner.Tick
 					}
@@ -118,7 +150,7 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 					efforts, err := fetchEfforts()
 					if err != nil {
-						m.err = fmt.Errorf("error, when fetchEfforts() for Update(). Error: %v", err)
+						m.err = fmt.Errorf("error, when fetchEfforts() for Update() after adding effort. Error: %v", err)
 						return m, cmd
 					}
 					m.efforts.SetItems(efforts)
@@ -159,14 +191,24 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 					case tea.KeyEsc:
 						m.activeView = activeViewListEfforts
 					case tea.KeyEnter:
-						validationMsg, err := applyRepoSelectionForEffort(m.selectedEffort, m.repos.Items())
-						if err != nil || validationMsg != "" {
-							m.err = err
-							m.validationMsg = validationMsg
-							return m, cmd
+						if !m.loading {
+							m.loading = true
+							go func() {
+								var md modelData
+								validationMsg, err := applyRepoSelectionForEffort(m.selectedEffort, m.repos.Items())
+								if err != nil || validationMsg != "" {
+									md.err = err
+									md.validationMsg = validationMsg
+								} else {
+									md.err = nil
+									md.validationMsg = ""
+									md.resetControls = true
+									md.activeView = activeViewListEfforts
+								}
+								loadingFinished <- md
+							}()
+							return m, m.spinner.Tick
 						}
-						m.effortRepoVisibleSelection = resetRepoSelection(m.effortRepoVisibleSelection)
-						m.activeView = activeViewListEfforts
 					case tea.KeySpace:
 						m.effortRepoVisibleSelection[m.cursor].Selected = !m.effortRepoVisibleSelection[m.cursor].Selected
 						theRepos := updateRepos(
@@ -205,12 +247,35 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 	case spinner.TickMsg:
 		select {
-		case m = <-m.loadingFinished:
+		case md := <-loadingFinished:
 			m.resetSpinner()
 			m.loading = false
+			m.err = md.err
+			m.validationMsg = md.validationMsg
 			switch m.activeView {
 			case activeViewAddNewRepo:
 				m.addNewRepoTextInput.Focus()
+				if md.resetControls {
+					m.addNewRepoTextInput.Reset()
+				}
+				m.repos = md.repos
+				m.activeView = md.activeView
+			case activeViewEditEffort:
+				if md.resetControls {
+					m.effortRepoVisibleSelection = resetRepoSelection(m.effortRepoVisibleSelection)
+				}
+				m.activeView = md.activeView
+			case activeViewDeleteEffort:
+				if md.resetControls {
+					m.deleteEffortTextInput.Reset()
+				}
+				m.activeView = md.activeView
+				efforts, err := fetchEfforts()
+				if err != nil {
+					m.err = fmt.Errorf("error, when fetchEfforts() for Update() after deleting effort. Error: %v", err)
+					return m, cmd
+				}
+				m.efforts.SetItems(efforts)
 			}
 		default:
 			m.spinner, cmd = m.spinner.Update(msg)
@@ -236,6 +301,8 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case activeViewAddNewEffort:
 		m.addNewEffortNameTextInput, cmd = m.addNewEffortNameTextInput.Update(msg)
 		m.addNewEffortBranchNameTextInput, cmd = m.addNewEffortBranchNameTextInput.Update(msg)
+	case activeViewDeleteEffort:
+		m.deleteEffortTextInput, cmd = m.deleteEffortTextInput.Update(msg)
 	}
 	return m, cmd
 }
