@@ -1,4 +1,4 @@
-module git-tool
+module github.com/JeremiahVaughan/git-tool
 
 go 1.23.0
 
