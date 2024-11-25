@@ -29,6 +29,19 @@ func (m model) View() string {
 			title,
 			m.deleteEffortTextInput.View(),
 		)
+    case activeViewDeleteRepo:
+		titlePrefix := fmt.Sprintf("Delete repo \"%s\"", m.selectedRepo.Title())
+		var title string
+		if m.loading {
+			title = fmt.Sprintf("%s\t%s", titlePrefix, m.spinner.View())
+		} else {
+			title = titlePrefix
+		}
+		display = fmt.Sprintf(
+			"%s\n%s",
+			title,
+			m.deleteRepoTextInput.View(),
+		)
 	case activeViewAddNewRepo:
 		titlePrefix := "Add a repo"
 		var title string

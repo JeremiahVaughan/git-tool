@@ -32,11 +32,13 @@ type model struct {
 	addNewEffortNameTextInput       textinput.Model
 	addNewEffortBranchNameTextInput textinput.Model
 	deleteEffortTextInput           textinput.Model
+	deleteRepoTextInput             textinput.Model
 	listFilterTextInput             textinput.Model
 	repos                           list.Model
 	efforts                         list.Model
 	effortRepoVisibleSelection      []repo
 	selectedEffort                  effort
+	selectedRepo                  repo
 	activeView                      viewOption
 	loading                         bool
 	spinner                         spinner.Model
@@ -51,11 +53,11 @@ type model struct {
 
 // modelData can't use the model itself because apparently channels have a size limit of 64kb
 type modelData struct {
-    resetControls bool
-    err error
-    validationMsg string
-    activeView viewOption
-    repos list.Model
+	resetControls bool
+	err           error
+	validationMsg string
+	activeView    viewOption
+	repos         list.Model
 }
 
 type viewOption string
@@ -66,6 +68,7 @@ const (
 	activeViewListEfforts  viewOption = "le"
 	activeViewAddNewEffort viewOption = "ane"
 	activeViewDeleteEffort viewOption = "de"
+	activeViewDeleteRepo   viewOption = "dr"
 	activeViewEditEffort   viewOption = "ee"
 )
 
@@ -151,6 +154,11 @@ func initModel() (model, error) {
 	deleteEffortTextInput.CharLimit = 32
 	deleteEffortTextInput.Width = 32
 
+	deleteRepoTextInput := textinput.New()
+	deleteRepoTextInput.Placeholder = "Type repo name to delete"
+	deleteRepoTextInput.CharLimit = 32
+	deleteRepoTextInput.Width = 32
+
 	listFilter := textinput.New()
 	listFilter.Placeholder = "no active filter"
 	listFilter.CharLimit = 15
@@ -181,6 +189,7 @@ func initModel() (model, error) {
 		addNewEffortNameTextInput:       effortTextInput,
 		addNewEffortBranchNameTextInput: effortBranchNameTextInput,
 		deleteEffortTextInput:           deleteEffortTextInput,
+		deleteRepoTextInput:             deleteRepoTextInput,
 		listFilterTextInput:             listFilter,
 		repos:                           theRepos,
 		activeView:                      activeViewListEfforts,

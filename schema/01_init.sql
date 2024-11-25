@@ -18,3 +18,4 @@ CREATE TABLE IF NOT EXISTS effort_repo (
 );
 
 CREATE INDEX idx_effort_id ON effort_repo (effort_id);                  
+CREATE INDEX idx_repo_id ON effort_repo (repo_id);                  

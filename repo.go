@@ -3,14 +3,12 @@ package main
 import (
 	"database/sql"
 	"fmt"
+	"github.com/charmbracelet/bubbles/list"
 	"log"
 	"os"
 	"os/exec"
 	"regexp"
 	"strings"
-	"sync"
-
-	"github.com/charmbracelet/bubbles/list"
 )
 
 type repo struct {
@@ -39,41 +37,17 @@ func addRepo(value string) (validationMsg string, err error) {
 		return fmt.Sprintf("%s is not valid, you must provide a valid repo ssh clone url (e.g., git@github.com:JeremiahVaughan/strength-gadget-v5.git)", value), nil
 	}
 
-	var wg sync.WaitGroup
-	errChan := make(chan error, 1)
+	err = cloneRepo(value)
+	if err != nil {
+		return "", fmt.Errorf("error, when cloneRepo() for addRepo(). Error: %v", err)
+	}
 
-	wg.Add(1)
-	go func() {
-		defer wg.Done()
-		var e error
-		e = cloneRepo(value)
-		if e != nil {
-			errChan <- fmt.Errorf("error, when cloneRepo() for addRepo(). Error: %v", e)
-			return
-		}
-	}()
-
-	wg.Add(1)
-	go func() {
-		defer wg.Done()
-		var e error
-		_, e = database.Exec(
-			`INSERT OR IGNORE INTO repo (url)
+	_, err = database.Exec(
+		`INSERT INTO repo (url)
 			VALUES (?)`,
-			value)
-		if e != nil {
-			errChan <- fmt.Errorf("error, when executing sql statement for addRepo(). Error: %v", e)
-			return
-		}
-	}()
-
-	go func() {
-		wg.Wait()
-		close(errChan)
-	}()
-
-	if errChanError := <-errChan; errChanError != nil {
-		return "", fmt.Errorf("error, when attempting to fetch data. Error: %v", errChanError)
+		value)
+	if err != nil {
+		return "", fmt.Errorf("error, when executing sql statement for addRepo(). Error: %v", err)
 	}
 
 	return "", nil
@@ -90,7 +64,7 @@ func cloneRepo(url string) error {
 	if err != nil {
 		return fmt.Errorf("error, when creating repos directory. Error: %v", err)
 	}
-	_, err = os.Stat(reposDirectory + "/" + strings.Split(url, "/")[1])
+	_, err = os.Stat(getRepoDir(url))
 	if os.IsNotExist(err) {
 		cmd := exec.Command("git", "clone", "--bare", url)
 		cmd.Dir = reposDirectory
@@ -98,10 +72,12 @@ func cloneRepo(url string) error {
 		if err != nil {
 			return fmt.Errorf("error, when executing clone commmand for %s. Output: %s. Error: %v", url, output, err)
 		}
-	} else if err != nil {
-		return fmt.Errorf("error, when checking if the repo already exists. Error: %v", err)
 	}
 	return nil
+}
+
+func getRepoDir(url string) string {
+	return reposDirectory + "/" + strings.Split(url, "/")[1]
 }
 
 func fetchRepos() ([]list.Item, error) {
@@ -193,4 +169,78 @@ func resetRepoSelection(repos []repo) []repo {
 		repos[i] = r
 	}
 	return repos
+}
+
+func deleteRepo(theRepo repo) error {
+	err := isSafeToDeleteRepo(theRepo)
+	if err != nil {
+		return fmt.Errorf("error, when isSafeToDeleteRepo() for deleteRepo(). Error: %v", err)
+	}
+
+	cmd := exec.Command("rm", "-rf", getRepoDir(theRepo.Url))
+	output, err := cmd.CombinedOutput()
+	if err != nil {
+		return fmt.Errorf("error, when attempting to delete repo files. Output: %s. Error: %v", output, err)
+	}
+
+	_, err = database.Exec(
+		`DELETE FROM repo
+        WHERE id = ?`,
+		theRepo.Id,
+	)
+	if err != nil {
+		return fmt.Errorf("error, when attempting to delete repo %s from database. Error: %v", theRepo.Title(), err)
+	}
+	return nil
+}
+
+func isSafeToDeleteRepo(theRepo repo) error {
+	rows, err := database.Query(
+		`SELECT e.name
+    FROM effort_repo er
+    JOIN effort e ON er.effort_id = e.id
+    WHERE repo_id = ?`,
+		theRepo.Id,
+	)
+
+	defer func(rows *sql.Rows) {
+		if rows != nil {
+			closeRowsError := rows.Close()
+			if closeRowsError != nil {
+				// no choice but to log the error since defer doesn't let us return errors
+				// defer is needed though because it ensures a cleanup attempt is made even if we should return early due to an error
+				log.Printf("error, when attempting to close database rows: %v", closeRowsError)
+			}
+		}
+	}(rows)
+
+	if err != nil {
+		return fmt.Errorf("error, when attempting to retrieve records. Error: %v", err)
+	}
+
+	var result []string
+	for rows.Next() {
+		var r string
+		err = rows.Scan(
+			&r,
+		)
+		if err != nil {
+			return fmt.Errorf("error, when scanning database rows. Error: %v", err)
+		}
+		result = append(result, r)
+	}
+
+	err = rows.Err()
+	if err != nil {
+		return fmt.Errorf("error, when iterating through database rows. Error: %v", err)
+	}
+
+	if len(result) != 0 {
+		return fmt.Errorf(
+			"unsafe delete operation, the %s repo is still being used by these efforts: %s",
+			theRepo.Url,
+			strings.Join(result, ", "),
+		)
+	}
+	return nil
 }
